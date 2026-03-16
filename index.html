@@ -101,6 +101,10 @@
         .swal-saas .swal2-cancel { background: #F3F4F6 !important; color: #9CA3AF !important; border-bottom: 4px solid #E5E7EB !important; border-radius: 16px !important; font-weight: 800 !important; padding: 12px 32px !important; font-size: 16px !important; transition: all 0.1s!important;}
         .swal-saas .swal2-cancel:active { transform: translateY(4px)!important; border-bottom-width: 0px!important; margin-bottom: 4px!important;}
         
+        /* 確保 SweetAlert 永遠在最上層 (蓋過 Loading 畫面) */
+        .swal2-container { z-index: 10000 !important; }
+
+
         /* Bouncing doodle animation */
         @keyframes doodleBounce {
             0%, 100% { transform: translateY(0) scale(1); }
@@ -568,6 +572,13 @@
                 onAuthStateChanged(this.auth, async (user) => {
                     const overlay = document.getElementById('loading-overlay');
                     if (user) {
+                        // 🚨 終極防呆 1：阻擋前台的「匿名身分」滲透進後台
+                        if (user.isAnonymous) {
+                            await signOut(this.auth);
+                            return; // 登出後會自動重新觸發進入 else 區塊，乾淨地顯示登入畫面
+                        }
+
+
                         this.currentUserEmail = user.email;
                         document.getElementById('current-user-email').innerText = user.email;
                         
@@ -677,19 +688,42 @@
 
 
             async determineRole(email) {
-                if (this.ADMIN_EMAILS.includes(email)) { 
+                // 將傳入的信箱轉全小寫進行比對
+                const normalizedEmail = (email || '').toLowerCase();
+                
+                if (this.ADMIN_EMAILS.includes(normalizedEmail)) { 
                     this.userRole='admin'; this.updateRoleUI("Super Admin","bg-duo-blue border-duo-blue-dark",false); return true; 
                 }
+                
                 try {
-                    const q = query(collection(this.db, this.paths.teachersCollection), where("email","==",email));
+                    // 先進行精準查詢 (速度快)
+                    const q = query(collection(this.db, this.paths.teachersCollection), where("email","==",normalizedEmail));
                     const snap = await getDocs(q);
+                    
                     if (!snap.empty) { 
                         this.userRole='teacher'; this.teacherId=snap.docs[0].id; this.updateRoleUI("Teacher","bg-[#FFC800] border-[#E5B400] text-gray-800",true); return true; 
                     } else { 
-                        await Swal.fire({icon:'error',title:'Uh oh!',text:'You don\'t have access here.',confirmButtonColor:'#FF4B4B',customClass:{popup:'swal-saas'},allowOutsideClick:false});
+                        // 🚨 終極防呆 2：相容舊有資料！如果精準查詢找不到，可能是因為資料庫裡存的是大寫信箱
+                        // 我們把所有老師抓下來，用 JavaScript 進行「無差別忽略大小寫」暴力比對
+                        const allTeachersSnap = await getDocs(collection(this.db, this.paths.teachersCollection));
+                        const matchedDoc = allTeachersSnap.docs.find(d => {
+                            const dbEmail = d.data().email || '';
+                            return dbEmail.toLowerCase() === normalizedEmail;
+                        });
+
+
+                        if (matchedDoc) {
+                            this.userRole='teacher'; this.teacherId=matchedDoc.id; this.updateRoleUI("Teacher","bg-[#FFC800] border-[#E5B400] text-gray-800",true); return true; 
+                        }
+
+
+                        // 如果真的不管怎樣都找不到，才跳出錯誤
+                        document.getElementById('loading-overlay').classList.add('hidden');
+                        await Swal.fire({icon:'error',title:'Uh oh!',text:`${email} doesn't have access.`,confirmButtonColor:'#FF4B4B',customClass:{popup:'swal-saas'},allowOutsideClick:false});
                         await signOut(this.auth); return false; 
                     }
                 } catch(e) { 
+                    document.getElementById('loading-overlay').classList.add('hidden');
                     await Swal.fire({icon:'error',title:'Error',text:'Role check failed.',confirmButtonColor:'#FF4B4B',customClass:{popup:'swal-saas'}});
                     await signOut(this.auth); return false; 
                 }
