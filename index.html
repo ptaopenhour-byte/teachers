@@ -255,7 +255,7 @@
                 </div>
 
 
-                <div class="flex justify-between items-center px-2 mt-2">
+                <div class="flex flex-wrap justify-between items-center gap-3 px-2 mt-2">
                     <label class="flex items-center gap-2 cursor-pointer group">
                         <div class="relative w-6 h-6">
                             <input type="checkbox" id="select-all-teachers" class="peer sr-only" onchange="admin.toggleAllTeachers(this.checked)">
@@ -265,6 +265,14 @@
                         </div>
                         <span class="text-sm font-black text-gray-500 group-hover:text-gray-800 transition uppercase tracking-widest">Select All</span>
                     </label>
+
+                    <div class="flex items-center gap-2">
+                        <i class="fas fa-filter text-gray-400 text-sm"></i>
+                        <select id="teacher-filter-subject" onchange="admin.renderTeachers()" class="input-duo py-2 px-4 text-sm min-w-[160px]">
+                            <option value="all">All Subjects</option>
+                        </select>
+                        <span id="teacher-filter-count" class="text-xs font-black text-gray-400 bg-gray-100 px-2 py-1 rounded-lg"></span>
+                    </div>
                 </div>
 
 
@@ -751,14 +759,38 @@
 
 
             renderTeachers() {
-                const grid = document.getElementById('teachers-grid'); if(!grid) return; 
-                if (this.data.teachers.length===0) { 
-                    grid.innerHTML='<div class="col-span-full card-duo p-10 text-center text-gray-400 font-bold border-dashed">No teachers found. Add some!</div>'; 
-                    this.updateTeacherSelection(); return; 
+                const grid = document.getElementById('teachers-grid'); if(!grid) return;
+
+                // ✅ 動態更新科目篩選下拉選單
+                const filterSelect = document.getElementById('teacher-filter-subject');
+                const countLabel = document.getElementById('teacher-filter-count');
+                if (filterSelect) {
+                    const prevFilter = filterSelect.value;
+                    let allSubj = [];
+                    this.data.teachers.forEach(t => { if(t.subject) t.subject.split(',').forEach(s => allSubj.push(s.trim())); });
+                    const uniqueSubjects = [...new Set([...this.subjects, ...allSubj])].sort();
+                    filterSelect.innerHTML = '<option value="all">All Subjects</option>';
+                    uniqueSubjects.forEach(s => {
+                        const teacherCount = this.data.teachers.filter(t => t.subject && t.subject.split(',').map(x=>x.trim()).includes(s)).length;
+                        filterSelect.innerHTML += `<option value="${escapeHtml(s)}" ${s === prevFilter ? 'selected' : ''}>${escapeHtml(s)} (${teacherCount})</option>`;
+                    });
                 }
-                
+
+                // ✅ 依科目篩選
+                const filter = filterSelect ? filterSelect.value : 'all';
+                const filtered = filter === 'all'
+                    ? this.data.teachers
+                    : this.data.teachers.filter(t => t.subject && t.subject.split(',').map(s=>s.trim()).includes(filter));
+
+                if (countLabel) countLabel.innerText = `${filtered.length} / ${this.data.teachers.length}`;
+
+                if (filtered.length===0) {
+                    grid.innerHTML=`<div class="col-span-full card-duo p-10 text-center text-gray-400 font-bold border-dashed">${this.data.teachers.length === 0 ? 'No teachers found. Add some!' : 'No teachers match this subject.'}</div>`;
+                    this.updateTeacherSelection(); return;
+                }
+
                 let html = '';
-                [...this.data.teachers].sort((a,b)=>(a.subject||'').localeCompare(b.subject||'')).forEach(t => {
+                [...filtered].sort((a,b)=>(a.subject||'').localeCompare(b.subject||'')||(a.name||'').localeCompare(b.name||'')).forEach(t => {
                     const imgHtml = t.image ? `<img src="${t.image}" class="w-full h-full object-cover rounded-full border-4 border-white shadow-sm">` : getMascotSVG(t.mascot||0);
                     html += `
                     <div class="card-duo p-5 flex flex-col items-center text-center relative hover:-translate-y-1 transition bg-white group">
