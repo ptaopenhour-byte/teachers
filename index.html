@@ -390,6 +390,21 @@
                         </div>
 
 
+                        <div class="card-duo p-6 bg-white border-2 border-gray-200" id="subject-manager-section">
+                            <h3 class="text-lg font-black text-gray-800 mb-2"><i class="fas fa-tags text-duo-green mr-2"></i> Subject List</h3>
+                            <p class="text-sm font-bold text-gray-500 mb-4">Manage the subject dropdown options for teachers.</p>
+                            <div id="subject-tags-container" class="flex flex-wrap gap-2 mb-4 min-h-[40px] p-3 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+                                <!-- Tags rendered by JS -->
+                            </div>
+                            <div class="flex gap-2">
+                                <input id="new-subject-input" type="text" class="input-duo flex-1 p-3 text-sm" placeholder="Type a new subject name..." onkeydown="if(event.key==='Enter'){event.preventDefault();admin.addSubject();}">
+                                <button onclick="admin.addSubject()" class="btn-duo bg-duo-green text-white border-duo-green-dark px-5 py-3 text-sm">
+                                    <i class="fas fa-plus mr-1"></i> Add
+                                </button>
+                            </div>
+                        </div>
+
+
                         <div class="card-duo p-6 bg-white border-2 border-gray-200">
                             <h3 class="text-lg font-black text-gray-800 mb-2"><i class="fas fa-plug text-duo-green mr-2"></i> Magic Wires (GAS)</h3>
                             <p class="text-sm font-bold text-gray-500 mb-4">Where do the confirmation emails come from?</p>
@@ -475,6 +490,7 @@
             modalSlots: [], modalTeacherId: null, unsubscribeLogs: null,
 
 
+            // ✅ 修正：init 不再讀取 Firebase，只初始化 SDK 和監聽登入狀態
             init() {
                 const app = initializeApp(firebaseConfig);
                 this.db = getFirestore(app);
@@ -482,13 +498,51 @@
                 this.storage = getStorage(app);
                 document.getElementById('batch-date').valueAsDate = new Date();
 
+                // ✅ 只監聽登入狀態，不讀取任何 Firestore 資料
+                onAuthStateChanged(this.auth, async (user) => {
+                    const overlay = document.getElementById('loading-overlay');
+                    if (user) {
+                        if (user.isAnonymous) { await signOut(this.auth); return; }
 
-                onSnapshot(doc(this.db, this.paths.config), (s) => {
+                        this.currentUserEmail = user.email;
+                        document.getElementById('current-user-email').innerText = user.email;
+
+                        const hasAccess = await this.determineRole(user.email);
+                        if (!hasAccess) { overlay.classList.add('hidden'); return; }
+
+                        document.getElementById('login-screen').classList.add('hidden');
+                        document.getElementById('dashboard').classList.remove('hidden');
+                        document.getElementById('mobile-header').classList.remove('hidden');
+                        document.getElementById('mobile-header').classList.add('flex');
+
+                        // ✅ 登入成功後才開始讀取 Firebase 資料（省下未登入的讀取）
+                        this.initConfigListener();
+                        this.loadBookings();
+                        this.loadTeachers();
+                        this.initLogsListener();
+                        this.startIdleDetection();
+                    } else {
+                        // ✅ 登出時取消所有監聽，停止 Firebase 讀取
+                        if (this.unsubscribeConfig) { this.unsubscribeConfig(); this.unsubscribeConfig = null; }
+                        if (this.unsubscribeLogs) { this.unsubscribeLogs(); this.unsubscribeLogs = null; }
+                        document.getElementById('login-screen').classList.remove('hidden');
+                        document.getElementById('dashboard').classList.add('hidden');
+                        document.getElementById('mobile-header').classList.add('hidden');
+                    }
+                    overlay.classList.add('hidden');
+                });
+            },
+
+            // ✅ 新增：Config 監聽獨立方法，登入後才啟動
+            unsubscribeConfig: null,
+            initConfigListener() {
+                if (this.unsubscribeConfig) this.unsubscribeConfig();
+                this.unsubscribeConfig = onSnapshot(doc(this.db, this.paths.config), (s) => {
                     if (s.exists()) {
                         const d = s.data();
                         const ln = document.getElementById('login-notice'), lnt = document.getElementById('login-notice-text');
                         const dn = document.getElementById('dashboard-notice'), dnt = document.getElementById('dashboard-notice-text');
-                        
+
                         if (d.backendNotice && d.backendNotice.trim() !== '') {
                             if (ln) { ln.classList.remove('hidden'); lnt.innerText = d.backendNotice; }
                             if (dn) { dn.classList.remove('hidden'); dnt.innerText = d.backendNotice; }
@@ -497,7 +551,6 @@
                             if (dn) dn.classList.add('hidden');
                         }
 
-
                         if (document.getElementById('setting-start')) {
                             document.getElementById('setting-start').value = d.start || '';
                             document.getElementById('setting-end').value = d.end || '';
@@ -505,42 +558,13 @@
                             document.getElementById('setting-backend-notice').value = d.backendNotice || '';
                             if(d.gasUrl) { document.getElementById('setting-gas-url').value = d.gasUrl; this.gasUrl = d.gasUrl; }
                         }
+
+                        // ✅ 從 Firestore 載入自訂科目清單
+                        if (d.customSubjects && Array.isArray(d.customSubjects)) {
+                            this.subjects = d.customSubjects;
+                        }
+                        this.renderSubjectManager();
                     }
-                });
-
-
-                onAuthStateChanged(this.auth, async (user) => {
-                    const overlay = document.getElementById('loading-overlay');
-                    if (user) {
-                        if (user.isAnonymous) { await signOut(this.auth); return; }
-
-
-                        this.currentUserEmail = user.email;
-                        document.getElementById('current-user-email').innerText = user.email;
-                        
-                        const hasAccess = await this.determineRole(user.email);
-                        if (!hasAccess) { overlay.classList.add('hidden'); return; }
-
-
-                        document.getElementById('login-screen').classList.add('hidden');
-                        document.getElementById('dashboard').classList.remove('hidden');
-                        document.getElementById('mobile-header').classList.remove('hidden');
-                        document.getElementById('mobile-header').classList.add('flex');
-                        
-                        // 初始化資料
-                        this.loadBookings();
-                        this.loadTeachers(); 
-                        
-                        // ✨ 優化 3：啟動 Log 的長連線監聽 (有 limit 500 保護)
-                        this.initLogsListener();
-                        
-                        this.startIdleDetection();
-                    } else {
-                        document.getElementById('login-screen').classList.remove('hidden');
-                        document.getElementById('dashboard').classList.add('hidden');
-                        document.getElementById('mobile-header').classList.add('hidden');
-                    }
-                    overlay.classList.add('hidden');
                 });
             },
 
@@ -796,8 +820,12 @@
                 if (this.modalSlots.length === 0) { container.innerHTML = '<div class="text-center text-gray-400 font-bold py-6 border-2 border-dashed border-gray-300 rounded-xl bg-white">No slots yet. Click + to add!</div>'; return; }
                 let html = '';
                 this.modalSlots.forEach((slot, idx) => {
-                    const isBooked = slot.status === 'booked'; const disabledAttr = isBooked ? 'disabled' : '';
-                    const bgClass = isBooked ? 'bg-gray-200 opacity-60' : 'bg-white hover:-translate-y-1';
+                    // ✅ locked 和 booked 都不允許編輯
+                    const isBooked = slot.status === 'booked';
+                    const isLocked = slot.status === 'locked';
+                    const isProtected = isBooked || isLocked;
+                    const disabledAttr = isProtected ? 'disabled' : '';
+                    const bgClass = isProtected ? 'bg-gray-200 opacity-60' : 'bg-white hover:-translate-y-1';
                     html += `
                     <div class="flex flex-wrap md:flex-nowrap items-center justify-between gap-3 mb-3 p-3 rounded-xl border-2 border-gray-200 ${bgClass} shadow-sm transition">
                         <div class="flex-1 w-full md:w-auto">
@@ -810,6 +838,7 @@
                         </div>
                         <div class="ml-auto flex items-center justify-end min-w-[50px]">
                             ${isBooked ? `<span class="text-[10px] uppercase font-extrabold px-2 py-1 rounded-lg tracking-widest bg-red-100 text-duo-red border border-red-200">Booked</span>`
+                                       : isLocked ? `<span class="text-[10px] uppercase font-extrabold px-2 py-1 rounded-lg tracking-widest bg-yellow-100 text-yellow-600 border border-yellow-200">Locking...</span>`
                                        : `<button onclick="admin.removeSlotRow(${idx})" class="w-8 h-8 rounded-lg bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-duo-red hover:border-duo-red border-2 border-transparent transition flex items-center justify-center"><i class="fas fa-times"></i></button>`}
                         </div>
                     </div>`;
@@ -827,7 +856,8 @@
 
 
             updateSlotRow(idx, field, value) { if (this.modalSlots[idx]) this.modalSlots[idx][field] = value; },
-            removeSlotRow(idx) { if (this.modalSlots[idx].status === 'booked') return; this.modalSlots.splice(idx, 1); this.renderSlotRows(); },
+            // ✅ 同時保護 locked 和 booked 的 slot 不被刪除
+            removeSlotRow(idx) { if (this.modalSlots[idx].status === 'booked' || this.modalSlots[idx].status === 'locked') return; this.modalSlots.splice(idx, 1); this.renderSlotRows(); },
 
 
             async saveManagedSlots() {
@@ -838,10 +868,12 @@
                     const batch = writeBatch(this.db);
                     const modalSlotIds = this.modalSlots.map(s => s.id).filter(id => id !== null);
                     
-                    existSnap.docs.forEach(d => { if (!modalSlotIds.includes(d.id) && d.data().status !== 'booked') batch.delete(d.ref); });
+                    // ✅ 不刪除 booked 和 locked 狀態的 slot
+                    existSnap.docs.forEach(d => { const st = d.data().status; if (!modalSlotIds.includes(d.id) && st !== 'booked' && st !== 'locked') batch.delete(d.ref); });
                     
                     this.modalSlots.forEach(s => {
-                        if (s.status === 'booked') return;
+                        // ✅ 跳過 booked 和 locked 狀態的 slot，避免覆蓋正在進行的預約
+                        if (s.status === 'booked' || s.status === 'locked') return;
                         const timeStr = `${s.start}~${s.end}`;
                         if (s.id) batch.update(doc(this.db, `${this.paths.teachersCollection}/${this.modalTeacherId}/slots/${s.id}`), { date: s.date, time: timeStr });
                         else batch.set(doc(sRef), { date: s.date, time: timeStr, status: 'available' });
@@ -901,12 +933,23 @@
 
                         const slotsResults = await Promise.all(fetchPromises);
 
-
+                        // ✅ 收集所有受影響的 bookings，一併刪除並通知家長
+                        let cancelledBookingsCount = 0;
                         for (const result of slotsResults) {
                             result.snap.forEach(d => {
                                 currentBatch.delete(d.ref); currentOpCount++;
                                 if (currentOpCount >= 490) { chunks.push(currentBatch.commit()); currentBatch = writeBatch(this.db); currentOpCount = 0; }
                             });
+
+                            // ✅ 清理該老師的所有 bookings
+                            const orphans = this.data.bookings.filter(b => b.teacherId === result.id);
+                            for (const ob of orphans) {
+                                currentBatch.delete(doc(this.db, this.paths.bookings, ob.id)); currentOpCount++;
+                                if (currentOpCount >= 490) { chunks.push(currentBatch.commit()); currentBatch = writeBatch(this.db); currentOpCount = 0; }
+                                if (ob.email) callGAS({action:"sendCancellation",email:ob.email,parent:ob.parent,student:ob.student,teacherName:ob.teacherName,slotTime:ob.slotTime,slotDate:ob.slotDate||''});
+                                cancelledBookingsCount++;
+                            }
+
                             currentBatch.delete(doc(this.db, this.paths.teachersCollection, result.id)); currentOpCount++;
                             if (currentOpCount >= 490) { chunks.push(currentBatch.commit()); currentBatch = writeBatch(this.db); currentOpCount = 0; }
                         }
@@ -916,8 +959,9 @@
                         await Promise.all(chunks);
 
 
-                        this.writeLog('Bulk Delete', `Deleted ${selected.length} teachers.`);
-                        Swal.fire({title:'Gone!', text:`${selected.length} teachers deleted.`, icon:'success', customClass:{popup:'swal-saas'}});
+                        this.writeLog('Bulk Delete', `Deleted ${selected.length} teachers${cancelledBookingsCount > 0 ? ` and ${cancelledBookingsCount} bookings` : ''}.`);
+                        if (cancelledBookingsCount > 0) this.loadBookings(); // ✅ 刷新預約列表
+                        Swal.fire({title:'Gone!', text:`${selected.length} teachers deleted.${cancelledBookingsCount > 0 ? ` ${cancelledBookingsCount} bookings cancelled and parents notified.` : ''}`, icon:'success', customClass:{popup:'swal-saas'}});
                         this.updateTeacherSelection();
                     } catch(e) { Swal.fire({title:'Error', text:e.message, icon:'error', customClass:{popup:'swal-saas'}}); }
                 }
@@ -1091,22 +1135,38 @@
 
 
             async deleteTeacher(id) {
-                const res = await Swal.fire({title:'Are you sure?',text:'This wipes the teacher AND all their slots!',icon:'warning',showCancelButton:true,confirmButtonColor:'#FF4B4B',confirmButtonText:'Yes, delete!',customClass:{popup:'swal-saas'}});
-                if (res.isConfirmed) { 
+                // ✅ 先檢查是否有未完成的預約
+                const hasBookings = this.data.bookings.some(b => b.teacherId === id);
+                const warningText = hasBookings
+                    ? 'This teacher has ACTIVE BOOKINGS! Deleting will also remove all associated bookings and notify parents.'
+                    : 'This wipes the teacher AND all their slots!';
+
+                const res = await Swal.fire({title:'Are you sure?',text:warningText,icon:'warning',showCancelButton:true,confirmButtonColor:'#FF4B4B',confirmButtonText: hasBookings ? 'Yes, delete everything!' : 'Yes, delete!',customClass:{popup:'swal-saas'}});
+                if (res.isConfirmed) {
                     Swal.fire({title:'Deleting...', customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
-                    try { 
+                    try {
                         const teacherData = this.data.teachers.find(t => t.id === id);
                         if (teacherData && teacherData.image && teacherData.image.includes('firebasestorage')) {
                             try { await deleteObject(storageRef(this.storage, `teachers/${id}_avatar.jpg`)); } catch(imgErr){}
                         }
-                        const slotsRef=collection(this.db,`${this.paths.teachersCollection}/${id}/slots`); 
-                        const slotsSnap=await getDocs(slotsRef); const batch=writeBatch(this.db); 
-                        slotsSnap.forEach(d=>batch.delete(d.ref)); batch.delete(doc(this.db,this.paths.teachersCollection,id)); 
-                        await batch.commit(); 
-                        
-                        this.writeLog('Teacher Deleted', `Deleted teacher ID: ${id}`);
-                        Swal.fire({title:'Gone!',text:'Teacher deleted.',icon:'success',customClass:{popup:'swal-saas'}}); 
-                    }catch(e){ Swal.fire({title:'Error',text:e.message,icon:'error',customClass:{popup:'swal-saas'}}); } 
+                        const slotsRef=collection(this.db,`${this.paths.teachersCollection}/${id}/slots`);
+                        const slotsSnap=await getDocs(slotsRef); const batch=writeBatch(this.db);
+                        slotsSnap.forEach(d=>batch.delete(d.ref)); batch.delete(doc(this.db,this.paths.teachersCollection,id));
+
+                        // ✅ 清理孤兒預約紀錄：刪除該老師的所有 bookings
+                        const orphanBookings = this.data.bookings.filter(b => b.teacherId === id);
+                        for (const ob of orphanBookings) {
+                            batch.delete(doc(this.db, this.paths.bookings, ob.id));
+                            // 發送取消通知給家長
+                            if (ob.email) callGAS({action:"sendCancellation",email:ob.email,parent:ob.parent,student:ob.student,teacherName:ob.teacherName||teacherData?.name||'Teacher',slotTime:ob.slotTime,slotDate:ob.slotDate||''});
+                        }
+
+                        await batch.commit();
+
+                        this.writeLog('Teacher Deleted', `Deleted teacher ID: ${id}${orphanBookings.length > 0 ? ` (${orphanBookings.length} bookings also removed)` : ''}`);
+                        if (this.userRole === 'admin') this.loadBookings(); // 刷新預約列表
+                        Swal.fire({title:'Gone!',text:`Teacher deleted.${orphanBookings.length > 0 ? ` ${orphanBookings.length} bookings cancelled and parents notified.` : ''}`,icon:'success',customClass:{popup:'swal-saas'}});
+                    }catch(e){ Swal.fire({title:'Error',text:e.message,icon:'error',customClass:{popup:'swal-saas'}}); }
                 }
             },
 
@@ -1144,9 +1204,17 @@
                 document.getElementById('bookings-empty').classList.add('hidden');
                 
                 list.forEach(b => {
+                    // ✅ XSS 防護：跳脫所有使用者輸入的資料
+                    const safeStudent = escapeHtml(b.student);
+                    const safeParent = escapeHtml(b.parent);
+                    const safeTeacher = escapeHtml(b.teacherName);
+                    const safeEmail = escapeHtml(b.email);
+                    const safeDate = escapeHtml(b.slotDate || 'Date');
+                    const safeTime = escapeHtml(b.slotTime);
+
                     let messageHtml = '';
                     if (b.message) {
-                        const escapedMsg = b.message.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                        const escapedMsg = escapeHtml(b.message);
                         if (escapedMsg.length > 50) {
                             messageHtml = `
                                 <div class="mt-3 bg-[#FFF4CC] border-2 border-[#FFC800] p-3 rounded-xl w-full">
@@ -1168,15 +1236,15 @@
                         <div class="card-duo p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 bg-white hover:-translate-y-1 transition-transform">
                             <div class="flex items-start gap-5 w-full md:w-auto flex-1">
                                 <div class="bg-[#DDF4C5] text-duo-green-dark rounded-2xl p-3 flex flex-col items-center justify-center min-w-[90px] border-2 border-duo-green shadow-sm mt-1">
-                                    <span class="text-xs font-black uppercase tracking-widest">${b.slotDate || 'Date'}</span>
-                                    <span class="text-2xl font-black mt-1 tracking-tight">${b.slotTime}</span>
+                                    <span class="text-xs font-black uppercase tracking-widest">${safeDate}</span>
+                                    <span class="text-2xl font-black mt-1 tracking-tight">${safeTime}</span>
                                 </div>
                                 <div class="flex-1 w-full">
-                                    <h3 class="font-black text-xl text-gray-800">${b.student}</h3>
+                                    <h3 class="font-black text-xl text-gray-800">${safeStudent}</h3>
                                     <p class="text-sm text-gray-500 font-bold mt-1">
-                                        Parent: <span class="text-gray-700">${b.parent}</span> <span class="mx-2 text-gray-300">|</span> <span class="text-duo-blue font-black">${b.teacherName}</span>
+                                        Parent: <span class="text-gray-700">${safeParent}</span> <span class="mx-2 text-gray-300">|</span> <span class="text-duo-blue font-black">${safeTeacher}</span>
                                     </p>
-                                    <a href="mailto:${b.email}" class="inline-flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-duo-blue mt-2 transition"><i class="fas fa-envelope"></i> ${b.email}</a>
+                                    <a href="mailto:${safeEmail}" class="inline-flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-duo-blue mt-2 transition"><i class="fas fa-envelope"></i> ${safeEmail}</a>
                                     ${messageHtml}
                                 </div>
                             </div>
@@ -1195,7 +1263,8 @@
                         const b = this.data.bookings.find(x=>x.id===bid);
                         const batch = writeBatch(this.db);
                         batch.delete(doc(this.db,this.paths.bookings,bid));
-                        batch.update(doc(this.db,`${this.paths.teachersCollection}/${tid}/slots/${sid}`),{status:'available',bookingRef:null});
+                        // ✅ 清除 lockedBy/lockedAt，與前台新 Rules 同步
+                        batch.update(doc(this.db,`${this.paths.teachersCollection}/${tid}/slots/${sid}`),{status:'available',bookingRef:null,lockedAt:null,lockedBy:null});
                         await batch.commit();
                         
                         this.writeLog('Admin Cancelled Booking', `Cancelled booking for ${b.student} with ${b.teacherName}`);
@@ -1211,6 +1280,64 @@
             },
 
 
+            // ✅ 新增：科目管理方法
+            renderSubjectManager() {
+                const container = document.getElementById('subject-tags-container');
+                if (!container) return;
+                if (this.subjects.length === 0) {
+                    container.innerHTML = '<span class="text-sm text-gray-400 font-bold">No subjects yet. Add some below!</span>';
+                    return;
+                }
+                container.innerHTML = this.subjects.map(s => `
+                    <span class="inline-flex items-center gap-2 bg-white border-2 border-gray-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-700 shadow-sm hover:border-duo-red transition group">
+                        ${escapeHtml(s)}
+                        <button onclick="admin.removeSubject('${escapeHtml(s).replace(/'/g, "\\'")}')" class="w-5 h-5 rounded-md bg-gray-100 text-gray-400 hover:bg-duo-red hover:text-white flex items-center justify-center text-xs transition group-hover:bg-red-100 group-hover:text-duo-red">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </span>
+                `).join('');
+            },
+
+            addSubject() {
+                const input = document.getElementById('new-subject-input');
+                const newSubject = (input.value || '').trim();
+                if (!newSubject) return;
+                if (this.subjects.includes(newSubject)) {
+                    Swal.fire({title:'Duplicate!', text:`"${newSubject}" already exists.`, icon:'warning', customClass:{popup:'swal-saas'}});
+                    return;
+                }
+                this.subjects.push(newSubject);
+                this.subjects.sort();
+                input.value = '';
+                this.renderSubjectManager();
+            },
+
+            removeSubject(subject) {
+                // 檢查是否有老師正在使用此科目
+                const teachersUsing = this.data.teachers.filter(t => t.subject && t.subject.split(',').map(s=>s.trim()).includes(subject));
+                if (teachersUsing.length > 0) {
+                    Swal.fire({
+                        title:'Subject in Use!',
+                        html:`<p class="text-sm text-gray-600 font-bold">"${escapeHtml(subject)}" is currently assigned to:</p>
+                              <div class="mt-3 text-left bg-gray-50 p-3 rounded-xl border-2 border-gray-200 max-h-40 overflow-y-auto">
+                                ${teachersUsing.map(t => `<div class="text-sm font-bold text-gray-800 py-1">${escapeHtml(t.name)}</div>`).join('')}
+                              </div>
+                              <p class="mt-3 text-xs text-gray-500 font-bold">You can still remove it, but existing teachers won't be affected.</p>`,
+                        icon:'warning', showCancelButton:true, confirmButtonText:'Remove Anyway', confirmButtonColor:'#FF4B4B',
+                        customClass:{popup:'swal-saas'}
+                    }).then(r => {
+                        if (r.isConfirmed) {
+                            this.subjects = this.subjects.filter(s => s !== subject);
+                            this.renderSubjectManager();
+                        }
+                    });
+                } else {
+                    this.subjects = this.subjects.filter(s => s !== subject);
+                    this.renderSubjectManager();
+                }
+            },
+
+
             async saveSettings() {
                 const start = document.getElementById('setting-start').value; const end = document.getElementById('setting-end').value;
                 const announcement = document.getElementById('setting-announcement').value; const backendNotice = document.getElementById('setting-backend-notice').value;
@@ -1219,7 +1346,8 @@
 
                 if (!start||!end) return Swal.fire({title:'Oops',text:'Don\'t forget the times!',icon:'error',customClass:{popup:'swal-saas'}});
                 try {
-                    await setDoc(doc(this.db, this.paths.config), { start, end, announcement, backendNotice, gasUrl });
+                    // ✅ 同時儲存自訂科目清單到 Firestore
+                    await setDoc(doc(this.db, this.paths.config), { start, end, announcement, backendNotice, gasUrl, customSubjects: this.subjects });
                     this.gasUrl = gasUrl; this.writeLog('Settings Updated', 'Admin updated system settings.');
                     Swal.fire({title:'Saved!',text:'Everything looks good.',icon:'success',customClass:{popup:'swal-saas'}});
                 } catch(e) { Swal.fire({title:'Error',text:'Failed to save.',icon:'error',customClass:{popup:'swal-saas'}}); }
@@ -1291,7 +1419,8 @@
 
                     for(const {tid, snap} of results){
                         const b=writeBatch(this.db); const ref=collection(this.db,`${this.paths.teachersCollection}/${tid}/slots`);
-                        snap.forEach(d=>b.delete(d.ref));
+                        // ✅ 只刪除 available 狀態的 slot，保留 booked/locked
+                        snap.forEach(d=>{ const st = d.data().status; if (st !== 'booked' && st !== 'locked') b.delete(d.ref); });
                         let cur=toMins(start);
                         for(let i=0;i<count;i++){
                             const endMins = cur + dur;
@@ -1308,7 +1437,9 @@
 
 
             exportCSV() {
-                const data=this.data.bookings.map(b=>({"Date":b.slotDate||'','Time':b.slotTime,'Teacher':b.teacherName,'Student':b.student,'Parent':b.parent,'Email':b.email,'Message':b.message||'', 'Booked At':new Date(b.createdAt).toLocaleString()}));
+                // ✅ 排序後匯出，按日期+時間+老師排列
+                const sorted = [...this.data.bookings].sort((a,b) => (a.slotDate||'').localeCompare(b.slotDate||'') || (a.slotTime||'').localeCompare(b.slotTime||'') || (a.teacherName||'').localeCompare(b.teacherName||''));
+                const data=sorted.map(b=>({"Date":b.slotDate||'','Time':b.slotTime,'Teacher':b.teacherName,'Student':b.student,'Parent':b.parent,'Email':b.email,'Message':b.message||'', 'Booked At': b.createdAt ? new Date(b.createdAt).toLocaleString() : ''}));
                 const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Bookings"); XLSX.writeFile(wb,"IBSH_PTA_Bookings.xlsx");
             },
 
