@@ -471,9 +471,15 @@
         }
 
 
+        // ✅ GAS Secret Token（必須和 GAS 端的 CONFIG.API_SECRET 一致）
+        const GAS_SECRET = "IBSH-PTA-2026-SECRET-CHANGE-ME";
+
         async function callGAS(payload) {
             const url = admin.gasUrl;
             if (!url || url.includes('YOUR_SCRIPT_ID')) return { ok: false, error: "GAS URL not set" };
+            // ✅ 自動附加 secret + admin token
+            payload.secret = GAS_SECRET;
+            payload.adminToken = GAS_SECRET + "-ADMIN";
             try {
                 const res = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(payload) });
                 return await res.json();
@@ -642,32 +648,32 @@
 
 
             async determineRole(email) {
-                // ✨ 優化 1：轉小寫進行比對
                 const normalizedEmail = (email || '').toLowerCase().trim();
-                
-                if (this.ADMIN_EMAILS.includes(normalizedEmail)) { 
-                    this.userRole='admin'; this.updateRoleUI("Super Admin","bg-duo-blue border-duo-blue-dark",false); return true; 
+
+                if (this.ADMIN_EMAILS.includes(normalizedEmail)) {
+                    this.userRole='admin'; this.updateRoleUI("Super Admin","bg-duo-blue border-duo-blue-dark",false); return true;
                 }
-                
+
                 try {
-                    // 精準查詢 (如果當初寫入時都有乖乖轉小寫，這裡一定能命中)
                     const q = query(collection(this.db, this.paths.teachersCollection), where("email","==",normalizedEmail));
                     const snap = await getDocs(q);
-                    
-                    if (!snap.empty) { 
-                        this.userRole='teacher'; this.teacherId=snap.docs[0].id; this.updateRoleUI("Teacher","bg-[#FFC800] border-[#E5B400] text-gray-800",true); return true; 
-                    } 
-                    
-                    // ✨ 優化 1：徹底移除全表掃描的 Fallback！找不到就是找不到。
-                    
+
+                    if (!snap.empty) {
+                        this.userRole='teacher'; this.teacherId=snap.docs[0].id; this.updateRoleUI("Teacher","bg-[#FFC800] border-[#E5B400] text-gray-800",true); return true;
+                    }
+
+                    // ✅ 先登出再顯示彈窗，避免 Auth Session 被利用
+                    await signOut(this.auth);
                     document.getElementById('loading-overlay').classList.add('hidden');
-                    await Swal.fire({icon:'error',title:'Uh oh!',text:`${email} doesn't have access.`,confirmButtonColor:'#FF4B4B',customClass:{popup:'swal-saas'},allowOutsideClick:false});
-                    await signOut(this.auth); return false; 
-                    
-                } catch(e) { 
+                    await Swal.fire({icon:'error',title:'Uh oh!',text:`${email} doesn't have access. You have been signed out.`,confirmButtonColor:'#FF4B4B',customClass:{popup:'swal-saas'},allowOutsideClick:false});
+                    return false;
+
+                } catch(e) {
+                    // ✅ 先登出再顯示錯誤
+                    try { await signOut(this.auth); } catch(_){}
                     document.getElementById('loading-overlay').classList.add('hidden');
-                    await Swal.fire({icon:'error',title:'Error',text:'Role check failed.',confirmButtonColor:'#FF4B4B',customClass:{popup:'swal-saas'}});
-                    await signOut(this.auth); return false; 
+                    await Swal.fire({icon:'error',title:'Error',text:'Role check failed. You have been signed out.',confirmButtonColor:'#FF4B4B',customClass:{popup:'swal-saas'}});
+                    return false;
                 }
             },
 
