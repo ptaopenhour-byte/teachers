@@ -472,18 +472,31 @@
 
 
         // ✅ GAS Secret Token（必須和 GAS 端的 CONFIG.API_SECRET 一致）
-        const GAS_SECRET = "artmrmbniemmoegrgr";
+        const GAS_SECRET = "IBSH-PTA-2026-SECRET-CHANGE-ME";
 
         async function callGAS(payload) {
             const url = admin.gasUrl;
-            if (!url || url.includes('YOUR_SCRIPT_ID')) return { ok: false, error: "GAS URL not set" };
+            console.log('🔗 callGAS:', { url: url ? url.substring(0, 50) + '...' : '❌ EMPTY', action: payload.action });
+            if (!url || url.includes('YOUR_SCRIPT_ID')) {
+                console.error('❌ GAS URL is empty or not configured!');
+                return { ok: false, error: "GAS URL not set. Go to Settings → Magic Wires to configure." };
+            }
             // ✅ 自動附加 secret + admin token
             payload.secret = GAS_SECRET;
             payload.adminToken = GAS_SECRET + "-ADMIN";
             try {
                 const res = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(payload) });
-                return await res.json();
-            } catch(err) { return { ok: false, error: err.message }; }
+                const text = await res.text();
+                console.log('📨 GAS raw response:', text.substring(0, 200));
+                try { return JSON.parse(text); }
+                catch(parseErr) {
+                    console.error('❌ GAS returned non-JSON:', text.substring(0, 500));
+                    return { ok: false, error: "GAS returned invalid response. Check GAS deployment." };
+                }
+            } catch(err) {
+                console.error('❌ callGAS fetch error:', err);
+                return { ok: false, error: err.message };
+            }
         }
 
 
@@ -533,7 +546,7 @@
                         this.initConfigListener();
                         this.loadBookings();
                         this.loadTeachers();
-                        this.initLogsListener();
+                        // ✅ Logs 不再自動載入，改為點進 Logs 頁面才載入（省 500 reads/次）
                         this.startIdleDetection();
                     } else {
                         // ✅ 登出時取消所有監聽，停止 Firebase 讀取
@@ -600,7 +613,7 @@
             // ✨ 優化 3：改用 onSnapshot 監聽 Logs，Firebase 只推送增量資料
             initLogsListener() {
                 if(this.unsubscribeLogs) this.unsubscribeLogs();
-                const logsQuery = query(collection(this.db, this.paths.logs), orderBy("timestampMs", "desc"), limit(500));
+                const logsQuery = query(collection(this.db, this.paths.logs), orderBy("timestampMs", "desc"), limit(50));
                 
                 this.unsubscribeLogs = onSnapshot(logsQuery, (snap) => {
                     this.data.logs = snap.docs.map(d => ({id: d.id, ...d.data()}));
@@ -752,6 +765,8 @@
                 if(nav) { nav.classList.add('active'); nav.classList.add('border-duo-green'); }
                 if (viewId==='batch') this.renderBatchSelection();
                 if (viewId==='teachers') this.renderTeachers();
+                // ✅ 點進 Logs 頁面才啟動監聽（lazy load）
+                if (viewId==='logs' && !this.unsubscribeLogs) this.initLogsListener();
                 if (window.innerWidth < 768) this.toggleSidebar();
             },
 
@@ -1501,10 +1516,12 @@
 
                 if (schedules.length === 0) return Swal.fire({title: 'Wait!', text: 'None of the booked teachers have an email address.', icon: 'error', customClass:{popup:'swal-saas'}});
                 try {
+                    console.log('📧 Sending to GAS:', JSON.stringify({action: "sendTeacherSchedules", teacherCount: schedules.length, gasUrl: admin.gasUrl ? '✅ Set' : '❌ Empty'}));
                     const result = await callGAS({action: "sendTeacherSchedules", schedules: schedules});
-                    if (result.ok) { this.writeLog('Email Sent', `Sent schedule emails to ${schedules.length} teachers.`); Swal.fire({title: 'Sent! 🚀', text: result.message, icon: 'success', customClass:{popup:'swal-saas'}}); } 
+                    console.log('📧 GAS Response:', JSON.stringify(result));
+                    if (result.ok) { this.writeLog('Email Sent', `Sent schedule emails to ${schedules.length} teachers.`); Swal.fire({title: 'Sent! 🚀', text: result.message, icon: 'success', customClass:{popup:'swal-saas'}}); }
                     else Swal.fire({title: 'Error', text: result.error || 'Failed to send emails.', icon: 'error', customClass:{popup:'swal-saas'}});
-                } catch (e) { Swal.fire({title: 'Error', text: e.message, icon: 'error', customClass:{popup:'swal-saas'}}); }
+                } catch (e) { console.error('📧 GAS Error:', e); Swal.fire({title: 'Error', text: e.message, icon: 'error', customClass:{popup:'swal-saas'}}); }
             }
         };
 
