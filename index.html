@@ -533,7 +533,7 @@
             IDLE_TIMEOUT: 15 * 60 * 1000, idleTimer: null, lastActivity: Date.now(),
             userRole: 'loading', teacherId: null, currentUserEmail: '',
             
-            modalSlots: [], modalTeacherId: null, unsubscribeLogs: null,
+            modalSlots: [], modalTeacherId: null, unsubscribeLogs: null, slotCountCache: null,
 
 
             // ✅ 修正：init 不再讀取 Firebase，只初始化 SDK 和監聽登入狀態
@@ -952,6 +952,7 @@
                     });
                     
                     await batch.commit();
+                    this.slotCountCache = null; // slot 有異動，清除快取
                     this.writeLog('Slots Updated', `Admin updated slots for teacher ID: ${this.modalTeacherId}`);
                     Swal.fire({title:'Saved!', text:'Time slots updated successfully.', icon:'success', timer: 1500, showConfirmButton: false, customClass:{popup:'swal-saas'}});
                 } catch(e) { Swal.fire({title:'Error', text:e.message, icon:'error', customClass:{popup:'swal-saas'}}); }
@@ -1262,9 +1263,9 @@
             },
 
 
-            refreshBookings() { 
+            refreshBookings() {
                 Swal.fire({title: 'Refreshing...', timer: 800, didOpen: () => Swal.showLoading(), customClass:{popup:'swal-saas'}});
-                this.loadBookings(); 
+                this.loadBookings();
             },
 
 
@@ -1367,18 +1368,22 @@
                     if (b.teacherId) bookingCountMap[b.teacherId] = (bookingCountMap[b.teacherId] || 0) + 1;
                 });
 
-                // 取得每位老師的總時段數
+                // 取得每位老師的總時段數（使用快取，避免重複讀取）
                 let html = '';
-                const slotCountPromises = teachers.map(async t => {
-                    try {
-                        const sRef = collection(this.db, `${this.paths.teachersCollection}/${t.id}/slots`);
-                        const snap = await getDocs(sRef);
-                        return { id: t.id, total: snap.size };
-                    } catch(e) { return { id: t.id, total: 0 }; }
-                });
-                const slotCounts = await Promise.all(slotCountPromises);
-                const slotCountMap = {};
-                slotCounts.forEach(s => slotCountMap[s.id] = s.total);
+                let slotCountMap = this.slotCountCache;
+                if (!slotCountMap) {
+                    const slotCountPromises = teachers.map(async t => {
+                        try {
+                            const sRef = collection(this.db, `${this.paths.teachersCollection}/${t.id}/slots`);
+                            const snap = await getDocs(sRef);
+                            return { id: t.id, total: snap.size };
+                        } catch(e) { return { id: t.id, total: 0 }; }
+                    });
+                    const slotCounts = await Promise.all(slotCountPromises);
+                    slotCountMap = {};
+                    slotCounts.forEach(s => slotCountMap[s.id] = s.total);
+                    this.slotCountCache = slotCountMap;
+                }
 
                 const sorted = [...teachers].sort((a,b) => (a.subject||'').localeCompare(b.subject||'') || (a.name||'').localeCompare(b.name||''));
                 sorted.forEach(t => {
