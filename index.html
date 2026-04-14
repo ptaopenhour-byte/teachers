@@ -221,9 +221,28 @@
                     </div>
                 </div>
                 
+                <!-- Admin: Teacher Cards Overview -->
+                <div id="bookings-teacher-cards" class="hidden">
+                    <div id="bookings-teacher-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pb-20"></div>
+                    <div id="bookings-teachers-empty" class="hidden card-duo p-16 text-center text-gray-400 flex flex-col items-center bg-white border-dashed border-4 border-gray-200">
+                        <div class="text-7xl mb-4 opacity-50">📭</div>
+                        <p class="font-black text-2xl text-gray-300">No teachers yet...</p>
+                        <p class="font-bold text-gray-400 mt-2">Add teachers to see their appointments.</p>
+                    </div>
+                </div>
+
+                <!-- Detail: Single Teacher's Bookings -->
+                <div id="bookings-detail-container" class="hidden space-y-4 pb-20">
+                    <button onclick="admin.backToTeacherCards()" class="btn-duo bg-white text-gray-600 border-2 border-gray-200 border-b-4 hover:bg-gray-50 px-5 py-3 mb-2">
+                        <i class="fas fa-arrow-left mr-2"></i> Back to Teachers
+                    </button>
+                    <div id="bookings-detail-header" class="card-duo p-6 bg-white"></div>
+                    <div id="bookings-detail-body" class="space-y-4"></div>
+                </div>
+
                 <div id="bookings-list-container" class="space-y-4 pb-20">
                     <div id="bookings-table-body" class="space-y-4"></div>
-                    
+
                     <div id="bookings-empty" class="hidden card-duo p-16 text-center text-gray-400 flex flex-col items-center bg-white border-dashed border-4 border-gray-200">
                         <div class="text-7xl mb-4 opacity-50">📭</div>
                         <p class="font-black text-2xl text-gray-300">It's quiet here...</p>
@@ -1250,62 +1269,188 @@
 
 
             renderBookings() {
+                if (this.userRole === 'admin') {
+                    // Admin: show teacher cards overview
+                    document.getElementById('bookings-list-container').classList.add('hidden');
+                    document.getElementById('bookings-detail-container').classList.add('hidden');
+                    document.getElementById('bookings-teacher-cards').classList.remove('hidden');
+                    this.renderTeacherCards();
+                    return;
+                }
+
+                // Teacher: show flat booking list as before
+                document.getElementById('bookings-teacher-cards').classList.add('hidden');
+                document.getElementById('bookings-detail-container').classList.add('hidden');
+                document.getElementById('bookings-list-container').classList.remove('hidden');
+
                 const container = document.getElementById('bookings-table-body'); container.innerHTML = '';
                 const list = [...this.data.bookings].sort((a,b)=>(a.slotDate||'').localeCompare(b.slotDate||'')||a.slotTime.localeCompare(b.slotTime));
-                
+
                 if (list.length===0) { document.getElementById('bookings-empty').classList.remove('hidden'); return; }
                 document.getElementById('bookings-empty').classList.add('hidden');
-                
+
                 list.forEach(b => {
-                    // ✅ XSS 防護：跳脫所有使用者輸入的資料
-                    const safeStudent = escapeHtml(b.student);
-                    const safeParent = escapeHtml(b.parent);
-                    const safeTeacher = escapeHtml(b.teacherName);
-                    const safeEmail = escapeHtml(b.email);
-                    const safeDate = escapeHtml(b.slotDate || 'Date');
-                    const safeTime = escapeHtml(b.slotTime);
-
-                    let messageHtml = '';
-                    if (b.message) {
-                        const escapedMsg = escapeHtml(b.message);
-                        if (escapedMsg.length > 50) {
-                            messageHtml = `
-                                <div class="mt-3 bg-[#FFF4CC] border-2 border-[#FFC800] p-3 rounded-xl w-full">
-                                    <p class="text-[10px] font-black uppercase text-[#D9A100] tracking-widest mb-1"><i class="fas fa-comment-dots"></i> Message from Parent</p>
-                                    <div id="msg-${b.id}" class="text-sm font-bold text-gray-800 whitespace-pre-wrap line-clamp-2">${escapedMsg}</div>
-                                    <button onclick="const msg=document.getElementById('msg-${b.id}'); if(msg.classList.contains('line-clamp-2')){msg.classList.remove('line-clamp-2');this.innerText='Show Less 🔼';}else{msg.classList.add('line-clamp-2');this.innerText='Read More 🔽';}" class="text-[11px] font-black text-duo-blue hover:text-duo-blue-dark mt-2 transition uppercase tracking-wider">Read More 🔽</button>
-                                </div>`;
-                        } else {
-                            messageHtml = `
-                                <div class="mt-3 bg-[#FFF4CC] border-2 border-[#FFC800] p-3 rounded-xl w-full">
-                                    <p class="text-[10px] font-black uppercase text-[#D9A100] tracking-widest mb-1"><i class="fas fa-comment-dots"></i> Message from Parent</p>
-                                    <div class="text-sm font-bold text-gray-800 whitespace-pre-wrap">${escapedMsg}</div>
-                                </div>`;
-                        }
-                    }
-
-
-                    container.innerHTML += `
-                        <div class="card-duo p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 bg-white hover:-translate-y-1 transition-transform">
-                            <div class="flex items-start gap-5 w-full md:w-auto flex-1">
-                                <div class="bg-[#DDF4C5] text-duo-green-dark rounded-2xl p-3 flex flex-col items-center justify-center min-w-[90px] border-2 border-duo-green shadow-sm mt-1">
-                                    <span class="text-xs font-black uppercase tracking-widest">${safeDate}</span>
-                                    <span class="text-2xl font-black mt-1 tracking-tight">${safeTime}</span>
-                                </div>
-                                <div class="flex-1 w-full">
-                                    <h3 class="font-black text-xl text-gray-800">${safeStudent}</h3>
-                                    <p class="text-sm text-gray-500 font-bold mt-1">
-                                        Parent: <span class="text-gray-700">${safeParent}</span> <span class="mx-2 text-gray-300">|</span> <span class="text-duo-blue font-black">${safeTeacher}</span>
-                                    </p>
-                                    <a href="mailto:${safeEmail}" class="inline-flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-duo-blue mt-2 transition"><i class="fas fa-envelope"></i> ${safeEmail}</a>
-                                    ${messageHtml}
-                                </div>
-                            </div>
-                            <div class="flex gap-2 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t-2 border-gray-100 md:border-t-0 items-center">
-                                ${this.userRole==='admin' ? `<button onclick="admin.cancelBooking('${b.id}','${b.teacherId}','${b.slotId}')" class="btn-duo flex-1 md:flex-none bg-white text-duo-red border-2 border-gray-200 border-b-4 hover:border-duo-red px-4 py-2 text-sm">Cancel</button>` : ''}
-                            </div>
-                        </div>`;
+                    container.innerHTML += this.buildBookingCard(b);
                 });
+            },
+
+
+            // ✅ 共用：產生單張預約卡片 HTML
+            buildBookingCard(b) {
+                const safeStudent = escapeHtml(b.student);
+                const safeParent = escapeHtml(b.parent);
+                const safeTeacher = escapeHtml(b.teacherName);
+                const safeEmail = escapeHtml(b.email);
+                const safeDate = escapeHtml(b.slotDate || 'Date');
+                const safeTime = escapeHtml(b.slotTime);
+                const safeGrade = escapeHtml(b.grade || '');
+
+                let messageHtml = '';
+                if (b.message) {
+                    const escapedMsg = escapeHtml(b.message);
+                    if (escapedMsg.length > 50) {
+                        messageHtml = `
+                            <div class="mt-3 bg-[#FFF4CC] border-2 border-[#FFC800] p-3 rounded-xl w-full">
+                                <p class="text-[10px] font-black uppercase text-[#D9A100] tracking-widest mb-1"><i class="fas fa-comment-dots"></i> Message from Parent</p>
+                                <div id="msg-${b.id}" class="text-sm font-bold text-gray-800 whitespace-pre-wrap line-clamp-2">${escapedMsg}</div>
+                                <button onclick="const msg=document.getElementById('msg-${b.id}'); if(msg.classList.contains('line-clamp-2')){msg.classList.remove('line-clamp-2');this.innerText='Show Less 🔼';}else{msg.classList.add('line-clamp-2');this.innerText='Read More 🔽';}" class="text-[11px] font-black text-duo-blue hover:text-duo-blue-dark mt-2 transition uppercase tracking-wider">Read More 🔽</button>
+                            </div>`;
+                    } else {
+                        messageHtml = `
+                            <div class="mt-3 bg-[#FFF4CC] border-2 border-[#FFC800] p-3 rounded-xl w-full">
+                                <p class="text-[10px] font-black uppercase text-[#D9A100] tracking-widest mb-1"><i class="fas fa-comment-dots"></i> Message from Parent</p>
+                                <div class="text-sm font-bold text-gray-800 whitespace-pre-wrap">${escapedMsg}</div>
+                            </div>`;
+                    }
+                }
+
+                const gradeHtml = safeGrade ? `<span class="mx-2 text-gray-300">|</span> <span class="bg-purple-100 text-purple-600 text-xs px-2 py-0.5 rounded-lg font-extrabold border border-purple-200">${safeGrade}</span>` : '';
+
+                return `
+                    <div class="card-duo p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 bg-white hover:-translate-y-1 transition-transform">
+                        <div class="flex items-start gap-5 w-full md:w-auto flex-1">
+                            <div class="bg-[#DDF4C5] text-duo-green-dark rounded-2xl p-3 flex flex-col items-center justify-center min-w-[90px] border-2 border-duo-green shadow-sm mt-1">
+                                <span class="text-xs font-black uppercase tracking-widest">${safeDate}</span>
+                                <span class="text-2xl font-black mt-1 tracking-tight">${safeTime}</span>
+                            </div>
+                            <div class="flex-1 w-full">
+                                <h3 class="font-black text-xl text-gray-800">${safeStudent}</h3>
+                                <p class="text-sm text-gray-500 font-bold mt-1">
+                                    Parent: <span class="text-gray-700">${safeParent}</span> <span class="mx-2 text-gray-300">|</span> <span class="text-duo-blue font-black">${safeTeacher}</span>${gradeHtml}
+                                </p>
+                                <a href="mailto:${safeEmail}" class="inline-flex items-center gap-1 text-xs font-bold text-gray-400 hover:text-duo-blue mt-2 transition"><i class="fas fa-envelope"></i> ${safeEmail}</a>
+                                ${messageHtml}
+                            </div>
+                        </div>
+                        <div class="flex gap-2 w-full md:w-auto mt-2 md:mt-0 pt-4 md:pt-0 border-t-2 border-gray-100 md:border-t-0 items-center">
+                            ${this.userRole==='admin' ? `<button onclick="admin.cancelBooking('${b.id}','${b.teacherId}','${b.slotId}')" class="btn-duo flex-1 md:flex-none bg-white text-duo-red border-2 border-gray-200 border-b-4 hover:border-duo-red px-4 py-2 text-sm">Cancel</button>` : ''}
+                        </div>
+                    </div>`;
+            },
+
+
+            // ✅ Admin Appointments: 老師卡片總覽（顯示已預約/總時段數）
+            async renderTeacherCards() {
+                const grid = document.getElementById('bookings-teacher-grid');
+                const teachers = this.data.teachers;
+
+                if (teachers.length === 0) {
+                    grid.innerHTML = '';
+                    document.getElementById('bookings-teachers-empty').classList.remove('hidden');
+                    return;
+                }
+                document.getElementById('bookings-teachers-empty').classList.add('hidden');
+
+                // 計算每位老師的預約數
+                const bookingCountMap = {};
+                this.data.bookings.forEach(b => {
+                    if (b.teacherId) bookingCountMap[b.teacherId] = (bookingCountMap[b.teacherId] || 0) + 1;
+                });
+
+                // 取得每位老師的總時段數
+                let html = '';
+                const slotCountPromises = teachers.map(async t => {
+                    try {
+                        const sRef = collection(this.db, `${this.paths.teachersCollection}/${t.id}/slots`);
+                        const snap = await getDocs(sRef);
+                        return { id: t.id, total: snap.size };
+                    } catch(e) { return { id: t.id, total: 0 }; }
+                });
+                const slotCounts = await Promise.all(slotCountPromises);
+                const slotCountMap = {};
+                slotCounts.forEach(s => slotCountMap[s.id] = s.total);
+
+                const sorted = [...teachers].sort((a,b) => (a.subject||'').localeCompare(b.subject||'') || (a.name||'').localeCompare(b.name||''));
+                sorted.forEach(t => {
+                    const booked = bookingCountMap[t.id] || 0;
+                    const total = slotCountMap[t.id] || 0;
+                    const imgHtml = t.image ? `<img src="${t.image}" class="w-full h-full object-cover rounded-full border-4 border-white shadow-sm">` : getMascotSVG(t.mascot||0);
+                    const pct = total > 0 ? Math.round(booked / total * 100) : 0;
+                    const barColor = pct >= 80 ? 'bg-duo-red' : pct >= 40 ? 'bg-[#FFC800]' : 'bg-duo-green';
+
+                    html += `
+                    <div onclick="admin.showTeacherBookings('${t.id}')" class="card-duo p-6 flex flex-col items-center text-center cursor-pointer hover:-translate-y-1 transition bg-white group">
+                        <div class="w-20 h-20 rounded-full mb-3 shadow-sm">${imgHtml}</div>
+                        <h3 class="font-black text-lg text-gray-800 mb-1">${escapeHtml(t.name)}</h3>
+                        <span class="bg-gray-100 text-gray-600 text-[10px] px-3 py-1 rounded-lg font-extrabold uppercase tracking-widest border-2 border-gray-200 mb-3">${escapeHtml(t.subject || '')}</span>
+                        <div class="w-full bg-gray-200 rounded-full h-3 mb-2 border border-gray-300">
+                            <div class="${barColor} h-full rounded-full transition-all" style="width: ${pct}%"></div>
+                        </div>
+                        <p class="text-sm font-black text-gray-600">
+                            <span class="text-duo-blue text-lg">${booked}</span> <span class="text-gray-400">/</span> <span class="text-lg">${total}</span>
+                            <span class="text-xs font-bold text-gray-400 ml-1">booked</span>
+                        </p>
+                    </div>`;
+                });
+                grid.innerHTML = html;
+            },
+
+
+            // ✅ Admin: 點進某位老師 → 顯示該老師的預約家長資料
+            showTeacherBookings(teacherId) {
+                const t = this.data.teachers.find(x => x.id === teacherId);
+                if (!t) return;
+
+                document.getElementById('bookings-teacher-cards').classList.add('hidden');
+                document.getElementById('bookings-list-container').classList.add('hidden');
+                document.getElementById('bookings-detail-container').classList.remove('hidden');
+
+                const imgHtml = t.image ? `<img src="${t.image}" class="w-full h-full object-cover rounded-full border-4 border-white shadow-sm">` : getMascotSVG(t.mascot||0);
+                document.getElementById('bookings-detail-header').innerHTML = `
+                    <div class="flex items-center gap-5">
+                        <div class="w-16 h-16 rounded-full shadow-sm">${imgHtml}</div>
+                        <div>
+                            <h3 class="font-black text-2xl text-gray-800">${escapeHtml(t.name)}</h3>
+                            <span class="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-lg font-extrabold uppercase tracking-widest border-2 border-gray-200">${escapeHtml(t.subject || '')}</span>
+                        </div>
+                    </div>`;
+
+                const body = document.getElementById('bookings-detail-body');
+                const teacherBookings = this.data.bookings
+                    .filter(b => b.teacherId === teacherId)
+                    .sort((a,b) => (a.slotDate||'').localeCompare(b.slotDate||'') || (a.slotTime||'').localeCompare(b.slotTime||''));
+
+                if (teacherBookings.length === 0) {
+                    body.innerHTML = `
+                        <div class="card-duo p-10 text-center text-gray-400 flex flex-col items-center bg-white border-dashed border-4 border-gray-200">
+                            <div class="text-5xl mb-3 opacity-50">📭</div>
+                            <p class="font-black text-xl text-gray-300">No appointments yet</p>
+                        </div>`;
+                    return;
+                }
+
+                body.innerHTML = '';
+                teacherBookings.forEach(b => {
+                    body.innerHTML += this.buildBookingCard(b);
+                });
+            },
+
+
+            // ✅ Admin: 返回老師卡片總覽
+            backToTeacherCards() {
+                document.getElementById('bookings-detail-container').classList.add('hidden');
+                document.getElementById('bookings-list-container').classList.add('hidden');
+                document.getElementById('bookings-teacher-cards').classList.remove('hidden');
             },
 
 
@@ -1492,7 +1637,7 @@
             exportCSV() {
                 // ✅ 排序後匯出，按日期+時間+老師排列
                 const sorted = [...this.data.bookings].sort((a,b) => (a.slotDate||'').localeCompare(b.slotDate||'') || (a.slotTime||'').localeCompare(b.slotTime||'') || (a.teacherName||'').localeCompare(b.teacherName||''));
-                const data=sorted.map(b=>({"Date":b.slotDate||'','Time':b.slotTime,'Teacher':b.teacherName,'Student':b.student,'Parent':b.parent,'Email':b.email,'Message':b.message||'', 'Booked At': b.createdAt ? new Date(b.createdAt).toLocaleString() : ''}));
+                const data=sorted.map(b=>({"Date":b.slotDate||'','Time':b.slotTime,'Teacher':b.teacherName,'Student':b.student,'Grade':b.grade||'','Parent':b.parent,'Email':b.email,'Message':b.message||'', 'Booked At': b.createdAt ? new Date(b.createdAt).toLocaleString() : ''}));
                 const ws=XLSX.utils.json_to_sheet(data); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,"Bookings"); XLSX.writeFile(wb,"IBSH_PTA_Bookings.xlsx");
             },
 
@@ -1508,7 +1653,7 @@
                 this.data.bookings.forEach(b => {
                     const tEmail = b.teacherEmail; if (!tEmail) return; 
                     if (!schedulesMap[tEmail]) schedulesMap[tEmail] = {teacherEmail: tEmail, teacherName: b.teacherName, bookings: []};
-                    schedulesMap[tEmail].bookings.push({slotTime: b.slotTime, slotDate: b.slotDate || '', student: b.student, parent: b.parent, email: b.email, message: b.message || ''});
+                    schedulesMap[tEmail].bookings.push({slotTime: b.slotTime, slotDate: b.slotDate || '', student: b.student, grade: b.grade || '', parent: b.parent, email: b.email, message: b.message || ''});
                 });
                 const schedules = Object.values(schedulesMap);
                 schedules.forEach(t => t.bookings.sort((a,b) => (a.slotDate||'').localeCompare(b.slotDate||'') || a.slotTime.localeCompare(b.slotTime)));
