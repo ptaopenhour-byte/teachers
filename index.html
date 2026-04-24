@@ -1472,7 +1472,12 @@
                         
                         this.writeLog('Admin Cancelled Booking', `Cancelled booking for ${b.student} with ${b.teacherName}`);
                         
-                        if (b) callGAS({action:"sendCancellation",email:b.email,parent:b.parent,student:b.student,teacherName:b.teacherName,slotTime:b.slotTime,slotDate:b.slotDate||''});
+                        if (b) {
+                            callGAS({action:"sendCancellation",email:b.email,parent:b.parent,student:b.student,teacherName:b.teacherName,slotTime:b.slotTime,slotDate:b.slotDate||''});
+                            if (b.teacherEmail) {
+                                callGAS({action:"sendTeacherCancellation",teacherEmail:b.teacherEmail,teacherName:b.teacherName,parent:b.parent,parentEmail:b.email,student:b.student,grade:b.grade||'',slotTime:b.slotTime,slotDate:b.slotDate||''});
+                            }
+                        }
                         
                         // ✨ Admin 因為取消了預約，需要手動刷新一次畫面
                         if (this.userRole === 'admin') this.loadBookings();
@@ -1649,27 +1654,85 @@
 
             async emailSchedulesToTeachers() {
                 if (!this.data.bookings || this.data.bookings.length === 0) return Swal.fire({title: 'No Bookings', text: 'There are no bookings to send yet.', icon: 'warning', customClass:{popup:'swal-saas'}});
-                const res = await Swal.fire({title: 'Send Schedules to Teachers?', text: 'This will email every booked teacher their final list of appointments.', icon: 'question', showCancelButton: true, confirmButtonText: 'Yes, send emails!', confirmButtonColor: '#FF9600', customClass: { popup: 'swal-saas' }});
-                if (!res.isConfirmed) return;
 
-
-                Swal.fire({title:'Sending Emails...', text: 'Please do not close this window.', customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
+                // 先把預約整理成「每位老師一份排程」
                 const schedulesMap = {};
                 this.data.bookings.forEach(b => {
-                    const tEmail = b.teacherEmail; if (!tEmail) return; 
+                    const tEmail = b.teacherEmail; if (!tEmail) return;
                     if (!schedulesMap[tEmail]) schedulesMap[tEmail] = {teacherEmail: tEmail, teacherName: b.teacherName, bookings: []};
-                    schedulesMap[tEmail].bookings.push({slotTime: b.slotTime, slotDate: b.slotDate || '', student: b.student, grade: b.grade || '', parent: b.parent, email: b.email, message: b.message || ''});
+                    schedulesMap[tEmail].bookings.push({slotTime: b.slotTime, slotDate: b.slotDate || '', student: b.student, grade: b.grade || '', parent: b.parent, email: b.email, message: b.message || '', location: b.location || ''});
                 });
                 const schedules = Object.values(schedulesMap);
                 schedules.forEach(t => t.bookings.sort((a,b) => (a.slotDate||'').localeCompare(b.slotDate||'') || a.slotTime.localeCompare(b.slotTime)));
 
-
                 if (schedules.length === 0) return Swal.fire({title: 'Wait!', text: 'None of the booked teachers have an email address.', icon: 'error', customClass:{popup:'swal-saas'}});
+
+                // ✅ 新增：讓管理員勾選要寄給哪些老師
+                schedules.sort((a,b) => (a.teacherName||'').localeCompare(b.teacherName||''));
+                const checkboxesHtml = schedules.map((t, i) => `
+                    <label style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:2px solid #e2e8f0;border-radius:12px;margin-bottom:8px;cursor:pointer;background:white;text-align:left;transition:.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
+                        <input type="checkbox" class="notify-teacher-cb" data-idx="${i}" checked style="width:20px;height:20px;cursor:pointer;flex-shrink:0;">
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:900;color:#1e293b;font-size:15px;">${escapeHtml(t.teacherName)}</div>
+                            <div style="font-size:12px;color:#64748b;font-weight:700;word-break:break-all;">${escapeHtml(t.teacherEmail)}</div>
+                        </div>
+                        <span style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:900;flex-shrink:0;">${t.bookings.length} booking${t.bookings.length>1?'s':''}</span>
+                    </label>
+                `).join('');
+
+                const pickRes = await Swal.fire({
+                    title: 'Notify Teachers',
+                    html: `
+                        <p style="color:#64748b;font-weight:700;margin-bottom:16px;">Select teachers to email their final schedule:</p>
+                        <div style="display:flex;gap:8px;justify-content:center;margin-bottom:16px;">
+                            <button type="button" id="cb-select-all" class="swal2-styled" style="background:#1CB0F6;font-size:13px;padding:6px 14px;">Select All</button>
+                            <button type="button" id="cb-deselect-all" class="swal2-styled" style="background:#94a3b8;font-size:13px;padding:6px 14px;">Deselect All</button>
+                        </div>
+                        <div style="max-height:380px;overflow-y:auto;padding:4px;">${checkboxesHtml}</div>
+                    `,
+                    width: 640,
+                    showCancelButton: true,
+                    confirmButtonText: 'Send to Selected',
+                    cancelButtonText: 'Cancel',
+                    confirmButtonColor: '#FF9600',
+                    customClass: { popup: 'swal-saas swal-wide' },
+                    didOpen: () => {
+                        document.getElementById('cb-select-all').addEventListener('click', () => {
+                            document.querySelectorAll('.notify-teacher-cb').forEach(cb => cb.checked = true);
+                        });
+                        document.getElementById('cb-deselect-all').addEventListener('click', () => {
+                            document.querySelectorAll('.notify-teacher-cb').forEach(cb => cb.checked = false);
+                        });
+                    },
+                    preConfirm: () => {
+                        const picked = Array.from(document.querySelectorAll('.notify-teacher-cb:checked')).map(cb => parseInt(cb.dataset.idx, 10));
+                        if (picked.length === 0) { Swal.showValidationMessage('Please select at least one teacher.'); return false; }
+                        return picked;
+                    }
+                });
+                if (!pickRes.isConfirmed) return;
+
+                const selectedIdx = pickRes.value;
+                const selectedSchedules = selectedIdx.map(i => schedules[i]);
+
+                // 二次確認
+                const confirmRes = await Swal.fire({
+                    title: `Send to ${selectedSchedules.length} teacher${selectedSchedules.length>1?'s':''}?`,
+                    text: 'Each teacher will receive their final list of appointments.',
+                    icon: 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Yes, send emails!',
+                    confirmButtonColor: '#FF9600',
+                    customClass: { popup: 'swal-saas' }
+                });
+                if (!confirmRes.isConfirmed) return;
+
+                Swal.fire({title:'Sending Emails...', text: 'Please do not close this window.', customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
                 try {
-                    console.log('📧 Sending to GAS:', JSON.stringify({action: "sendTeacherSchedules", teacherCount: schedules.length, gasUrl: admin.gasUrl ? '✅ Set' : '❌ Empty'}));
-                    const result = await callGAS({action: "sendTeacherSchedules", schedules: schedules});
+                    console.log('📧 Sending to GAS:', JSON.stringify({action: "sendTeacherSchedules", teacherCount: selectedSchedules.length}));
+                    const result = await callGAS({action: "sendTeacherSchedules", schedules: selectedSchedules});
                     console.log('📧 GAS Response:', JSON.stringify(result));
-                    if (result.ok) { this.writeLog('Email Sent', `Sent schedule emails to ${schedules.length} teachers.`); Swal.fire({title: 'Sent! 🚀', text: result.message, icon: 'success', customClass:{popup:'swal-saas'}}); }
+                    if (result.ok) { this.writeLog('Email Sent', `Sent schedule emails to ${selectedSchedules.length} teachers (selected from ${schedules.length}).`); Swal.fire({title: 'Sent! 🚀', text: result.message, icon: 'success', customClass:{popup:'swal-saas'}}); }
                     else Swal.fire({title: 'Error', text: result.error || 'Failed to send emails.', icon: 'error', customClass:{popup:'swal-saas'}});
                 } catch (e) { console.error('📧 GAS Error:', e); Swal.fire({title: 'Error', text: e.message, icon: 'error', customClass:{popup:'swal-saas'}}); }
             }
