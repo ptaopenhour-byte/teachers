@@ -442,6 +442,15 @@
                         </div>
 
 
+                        <div class="bg-red-50 border-2 border-duo-red rounded-3xl p-6 shadow-[0_4px_0_0_#FF4B4B]">
+                            <h3 class="text-lg font-black text-duo-red mb-2"><i class="fas fa-triangle-exclamation mr-2"></i> Booking Reset</h3>
+                            <p class="text-sm font-bold text-red-600 mb-5">Delete every parent booking record and reopen booked or locked teacher slots. Teacher profiles and slot times stay.</p>
+                            <button onclick="admin.clearAllTeacherBookSlotRecords()" class="btn-duo w-full bg-duo-red text-white border-duo-red-dark py-4 text-base md:text-lg">
+                                <i class="fas fa-trash-can mr-2"></i> Clear All Booking Records
+                            </button>
+                        </div>
+
+
                         <div class="pt-4">
                             <button onclick="admin.saveSettings()" class="btn-duo w-full bg-duo-green text-white border-duo-green-dark py-4 text-xl">Save All Settings 💾</button>
                         </div>
@@ -1542,6 +1551,91 @@
                 } else {
                     this.subjects = this.subjects.filter(s => s !== subject);
                     this.renderSubjectManager();
+                }
+            },
+
+
+            async clearAllTeacherBookSlotRecords() {
+                const res = await Swal.fire({
+                    title: 'Clear all booking records?',
+                    html: `<div class="text-left text-sm font-bold text-gray-600 leading-relaxed">
+                            <p>This will delete every parent booking record and reopen all booked or locked teacher slots.</p>
+                            <p class="mt-3 text-duo-red">No cancellation emails will be sent. Type <b>CLEAR</b> to continue.</p>
+                           </div>`,
+                    input: 'text',
+                    inputPlaceholder: 'CLEAR',
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#FF4B4B',
+                    confirmButtonText: 'Clear Everything',
+                    customClass: { popup: 'swal-saas' },
+                    preConfirm: (value) => {
+                        if ((value || '').trim() !== 'CLEAR') {
+                            Swal.showValidationMessage('Type CLEAR to confirm.');
+                            return false;
+                        }
+                        return true;
+                    }
+                });
+                if (!res.isConfirmed) return;
+
+                Swal.fire({title:'Clearing...', text:'Please keep this tab open.', allowOutsideClick:false, customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
+
+                try {
+                    const bookingsSnap = await getDocs(collection(this.db, this.paths.bookings));
+                    const teachersSnap = await getDocs(collection(this.db, this.paths.teachersCollection));
+                    const slotSnaps = await Promise.all(teachersSnap.docs.map(t => getDocs(collection(this.db, `${this.paths.teachersCollection}/${t.id}/slots`))));
+
+                    const batchCommits = [];
+                    let currentBatch = writeBatch(this.db);
+                    let currentOpCount = 0;
+                    let deletedBookings = 0;
+                    let releasedSlots = 0;
+
+                    const flushBatch = () => {
+                        if (currentOpCount === 0) return;
+                        batchCommits.push(currentBatch.commit());
+                        currentBatch = writeBatch(this.db);
+                        currentOpCount = 0;
+                    };
+
+                    const queueBatchOp = (operation) => {
+                        operation(currentBatch);
+                        currentOpCount++;
+                        if (currentOpCount >= 490) flushBatch();
+                    };
+
+                    bookingsSnap.forEach(d => {
+                        queueBatchOp(batch => batch.delete(d.ref));
+                        deletedBookings++;
+                    });
+
+                    slotSnaps.forEach(snap => {
+                        snap.forEach(d => {
+                            const status = d.data().status;
+                            if (status === 'booked' || status === 'locked') {
+                                queueBatchOp(batch => batch.update(d.ref, {status:'available', bookingRef:null, lockedAt:null, lockedBy:null}));
+                                releasedSlots++;
+                            }
+                        });
+                    });
+
+                    if (deletedBookings === 0 && releasedSlots === 0) {
+                        Swal.fire({title:'Already Clear', text:'There are no booking records or booked slots to clear.', icon:'info', customClass:{popup:'swal-saas'}});
+                        return;
+                    }
+
+                    flushBatch();
+                    await Promise.all(batchCommits);
+
+                    this.data.bookings = [];
+                    this.slotCountCache = null;
+                    await this.writeLog('Booking Reset', `Cleared ${deletedBookings} booking records and reopened ${releasedSlots} teacher slots.`);
+                    if (this.userRole === 'admin') await this.loadBookings();
+
+                    Swal.fire({title:'Cleared!', text:`Deleted ${deletedBookings} booking records and reopened ${releasedSlots} teacher slots.`, icon:'success', customClass:{popup:'swal-saas'}});
+                } catch(e) {
+                    Swal.fire({title:'Error', text:e.message || 'Failed to clear booking records.', icon:'error', customClass:{popup:'swal-saas'}});
                 }
             },
 
