@@ -1,0 +1,163 @@
+/* Shared visual direction with booking-main/booking-theme.css: Lark-inspired,
+   pale blue canvas, white surfaces, restrained type and blue actions. */
+:root { --accent: #356bff; --ink: #242830; --muted: #646c7a; --line: #e9edf4; --surface: #f7faff; }
+html { background: #f3f7ff; }
+body { color: var(--ink); background: radial-gradient(ellipse at 22% 94%, #e2ecff 0, transparent 66%), #f3f7ff; font-family: Inter, sans-serif; font-weight: 400; }
+button, input, select, textarea { font: inherit; }
+button { cursor: pointer; }
+button:disabled { cursor: default; opacity: .55; }
+button, a, input, select, textarea, [tabindex] { -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid #a8c0ff; outline-offset: 3px; }
+.font-black, .font-extrabold { font-weight: 600 !important; }
+.font-bold { font-weight: 500 !important; }
+.tracking-widest, .tracking-wider { letter-spacing: .025em !important; }
+.text-gray-400 { color: #737e90; }
+.text-gray-300 { color: #737e90; }
+.text-gray-800 { color: var(--ink); }
+h2 { letter-spacing: -.035em; }
+.portal-brand { white-space: nowrap; font-size: 17px; font-weight: 600; letter-spacing: -.035em; line-height: 1.4; }
+#login-screen { min-height: 100svh; }
+#login-screen > .card-duo { border: 0; padding: 40px 32px; box-shadow: 0 12px 40px rgba(43,70,120,.07); }
+#login-screen .portal-brand { font-size: clamp(20px, 5vw, 26px); }
+.portal-icon { display: grid; place-items: center; width: 56px; height: 56px; margin: 0 auto 24px; color: var(--accent); background: #eef3ff; border-radius: 14px; font-size: 25px; }
+#loading-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; background: #f3f7ff; }
+#loading-overlay.hidden { display: none; }
+.swal2-container { z-index: 10000 !important; }
+.custom-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.custom-scroll::-webkit-scrollbar-thumb { background: #dce3ef; border-radius: 10px; }
+.admin-spinner { width: 32px; height: 32px; border: 3px solid #dbe5fa; border-top-color: var(--accent); border-radius: 50%; animation: portal-spin .8s linear infinite; }
+@keyframes portal-spin { to { transform: rotate(360deg); } }
+.btn-duo.btn-duo { min-height: 44px; border-width: 1px; border-radius: 8px; font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; box-shadow: none; transition: background .15s, border-color .15s; }
+.btn-duo:active { transform: none; margin-bottom: 0; border-bottom-width: 1px; }
+.btn-duo.bg-duo-green, .btn-duo.bg-duo-blue, #btn-email-teachers { background: var(--accent); border-color: var(--accent); color: white; }
+.btn-duo.bg-duo-green:hover, .btn-duo.bg-duo-blue:hover, #btn-email-teachers:hover { background: #2458e6; }
+.btn-duo.bg-white:hover { background: #f3f6fc; border-color: #bcccf0; }
+.btn-duo.bg-duo-red { border-color: #c84049; }
+.card-duo { border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 6px 24px rgba(43,70,120,.035); }
+.card-duo:hover { transform: none; }
+.input-duo, #slots-modal-container input { min-width: 0; max-width: 100%; min-height: 44px; background: white; border: 1px solid #dce3ef; border-radius: 8px; font-size: 14px; font-weight: 400; color: var(--ink); }
+.input-duo:focus, #slots-modal-container input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #e8efff; }
+textarea { resize: vertical; }
+input[type="checkbox"] { accent-color: var(--accent); }
+input.peer:focus-visible + div { outline: 3px solid #a8c0ff; outline-offset: 3px; }
+#sidebar { width: 264px; flex-shrink: 0; background: var(--surface); border-right: 1px solid #e3eaf5; height: 100dvh; }
+#sidebar > div:first-child { padding: 32px 24px 24px; border-bottom: 1px solid var(--line); }
+#sidebar nav { padding: 24px 16px; }
+#sidebar nav > p { text-transform: none; font-size: 12px; margin-bottom: 16px; }
+#sidebar nav .space-y-3 > :not([hidden]) ~ :not([hidden]), #sidebar nav.space-y-3 > :not([hidden]) ~ :not([hidden]) { margin-top: 6px; }
+#sidebar > div:last-child { border-top: 1px solid var(--line); background: transparent; }
+#sidebar > div:last-child > div { background: transparent; border: 0; padding: 8px; }
+.sidebar-item.sidebar-item { border: 1px solid transparent; min-height: 48px; border-radius: 8px; padding: 12px 14px; gap: 12px; color: #646c7a; font-size: 14px; font-weight: 500; }
+.sidebar-item.active { color: var(--accent); background: #eaf0ff; border: 1px solid #eaf0ff; }
+.sidebar-item:hover:not(.active) { background: #edf2fa; }
+.nav-icon { display: inline-flex; width: 20px; justify-content: center; font-size: 17px; flex-shrink: 0; }
+#role-badge { border: 0; padding: 0; border-radius: 0; background: transparent; color: var(--muted); font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+#idle-status { background: #eaf0ff; color: #496bad; font-size: 11px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+#dashboard > main { min-width: 0; padding: 40px; max-width: 1440px; }
+#dashboard > main > div > .card-duo:first-child:not(#dashboard-notice), #view-bookings > .card-duo:nth-child(2) { box-shadow: none; }
+#view-bookings > .card-duo:nth-child(2), #view-teachers > .card-duo:first-child, #view-logs > .card-duo:first-child { padding: 0 0 8px; background: transparent; border: 0; border-radius: 0; flex-wrap: wrap; }
+#dashboard h2 { font-size: 28px; line-height: 1.3; }
+#dashboard h2 + p { font-size: 14px; font-weight: 400 !important; line-height: 1.7; }
+#teachers-grid, #bookings-teacher-grid { grid-template-columns: repeat(auto-fill, minmax(218px, 1fr)); gap: 18px; padding-bottom: 24px; }
+#teachers-grid > .card-duo, #bookings-teacher-grid > .card-duo { padding: 24px 20px; }
+#teachers-grid > .card-duo { padding-top: 72px; }
+#teachers-grid .absolute.top-4.right-4 { opacity: 1; }
+#teachers-grid .absolute button { width: 44px; height: 44px; border: 0; background: transparent; }
+#teachers-grid .absolute button:hover { background: #eef3ff; }
+#teachers-grid .w-24, #bookings-teacher-grid .w-20 { width: 56px; height: 56px; box-shadow: none; }
+.teacher-initials { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border-radius: 50%; color: #3962b7; background: #e8effc; font-size: 18px; font-weight: 500; }
+.teacher-photo { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+#teachers-grid h3, #bookings-teacher-grid h3 { font-size: 17px; overflow-wrap: anywhere; }
+#teachers-grid h3 + span, #bookings-teacher-grid h3 + span, #bookings-detail-header span.bg-gray-100 { text-transform: none; letter-spacing: 0 !important; border: 0; background: #f4f6fa; font-size: 12px; line-height: 1.5; }
+#bookings-teacher-grid .h-3 { height: 5px; border: 0; background: #edf0f7; margin-top: 8px; }
+#bookings-teacher-grid > button { color: inherit; font: inherit; }
+#bookings-teacher-grid > button:hover { border-color: #a9bfff; background: #fcfdff; }
+.booking-card > div, .booking-card .flex-1 { min-width: 0; }
+.booking-card { overflow-wrap: anywhere; }
+.booking-card .appointment-time { background: #eef3ff; border: 0; color: #3962b7; box-shadow: none; border-radius: 8px; min-width: 120px; }
+.appointment-time .text-2xl { font-size: 16px; white-space: nowrap; }
+#dashboard-notice, [class~="bg-[#FFF4CC]"] { background: #f7faff; border-color: #dfe8f9; }
+[class~="bg-[#DDF4C5]"] { background: #eef3ff; }
+.btn-duo[class~="bg-[#1CB0F6]"] { background: var(--accent); border-color: var(--accent); }
+[class~="text-[#D9A100]"], [class~="text-[#1899D6]"] { color: #496bad; }
+#view-settings > .card-duo { max-width: 900px; padding: 32px; }
+#view-settings .space-y-8 > div:not(:last-child) { border: 0; border-bottom: 1px solid var(--line); border-radius: 0; box-shadow: none; padding: 0 0 28px; background: transparent; }
+#view-settings .space-y-8 > .bg-red-50 { border: 1px solid #f1d5d9 !important; padding: 24px !important; border-radius: 10px !important; background: #fff9fa !important; }
+#view-settings h3 { font-size: 16px; }
+#view-settings label, #view-batch label:not(:has(input[type="checkbox"])) { text-transform: none; letter-spacing: 0 !important; font-size: 13px; }
+#view-settings p { font-weight: 400 !important; }
+#view-batch .lg\:col-span-2 > div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: none; }
+#view-batch .lg\:col-span-3 > div:first-child { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+#view-batch .lg\:col-span-3 > div:first-child > div { flex-wrap: wrap; }
+#view-batch h3 { font-size: 17px; }
+#batch-teacher-list { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+#batch-teacher-list label { border-width: 1px; border-radius: 8px; box-shadow: none; min-width: 0; }
+#batch-teacher-list label:has(input:checked) { border-color: #9eb6f8; background: #f0f5ff; }
+#batch-teacher-list .teacher-initials { font-size: 14px; }
+#batch-teacher-list .col-span-2 { grid-column: 1 / -1; }
+#view-logs table { min-width: 650px; }
+#view-logs th { text-transform: none; letter-spacing: 0; font-weight: 500; }
+.swal2-popup.swal-saas { border: 1px solid var(--line) !important; border-radius: 14px !important; box-shadow: 0 20px 70px #263e6f20 !important; padding: 24px !important; font-family: Inter, sans-serif !important; }
+.swal-saas .swal2-title { padding: 0; color: var(--ink) !important; font: 600 24px/1.4 Inter, sans-serif !important; letter-spacing: -.025em; }
+.swal-saas .swal2-html-container { margin: 20px 0 0; padding: 0; color: var(--muted); font-size: 14px; }
+.swal-saas .swal2-confirm, .swal-saas .swal2-cancel { min-height: 44px; border: 0 !important; border-radius: 8px !important; font: 500 14px Inter, sans-serif !important; padding: 12px 24px !important; box-shadow: none; }
+.swal-saas .swal2-confirm { background: var(--accent) !important; }
+.swal-saas .swal2-cancel { background: #eff2f7 !important; color: var(--muted) !important; }
+.swal-saas .swal2-confirm:active, .swal-saas .swal2-cancel:active { transform: none !important; margin-bottom: 0 !important; }
+.swal-saas:has(.swal2-warning) .swal2-confirm { background: #c84049 !important; }
+.swal-saas label { color: var(--muted); text-transform: none; letter-spacing: 0 !important; }
+.profile-photo-button { border: 0; background: #e8effc; width: 80px; height: 80px; border-radius: 50%; overflow: hidden; }
+.photo-controls { display: flex; gap: 16px; margin-top: 12px; }
+.photo-controls button { min-height: 44px; color: var(--accent); font-size: 13px; }
+#preview-initials .teacher-initials { font-size: 24px; }
+#slots-modal-container { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+#slots-modal-container > div { transform: none; border-width: 1px; box-shadow: none; }
+#slots-modal-container button { width: 44px; height: 44px; }
+#mobile-header { box-shadow: none; border-bottom: 1px solid var(--line); background: #f7faff; }
+#menu-toggle { width: 44px; height: 44px; border: 0; background: transparent; }
+@media (min-width: 768px) and (max-width: 1100px) {
+    #sidebar { width: 232px; }
+    #sidebar > div:first-child { padding: 32px 18px 24px; }
+    #sidebar .portal-brand { font-size: 16px; }
+    #dashboard > main { padding: 28px 24px; }
+    #view-settings > .card-duo, #view-batch > .card-duo { padding: 24px; }
+    #view-settings .grid { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 767px) {
+    #dashboard > main { padding: 24px 16px calc(32px + env(safe-area-inset-bottom)); }
+    #dashboard h2 { font-size: 25px; }
+    #view-bookings > .card-duo:nth-child(2) > div:last-child { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
+    #view-bookings > .card-duo:nth-child(2) > div:last-child button { padding: 12px; }
+    #btn-email-teachers { grid-column: 1 / -1; }
+    #sidebar { width: min(280px, 86vw); }
+    #sidebar .portal-brand { font-size: 17px; }
+    #mobile-header { padding-inline: 12px; gap: 10px; }
+    #mobile-header .portal-brand { font-size: 17px; }
+    #teachers-grid, #bookings-teacher-grid { grid-template-columns: minmax(0,1fr); gap: 14px; }
+    #bookings-teacher-grid > .card-duo { display: grid; grid-template-columns: 48px minmax(0,1fr); text-align: left; column-gap: 16px; padding: 20px; }
+    #bookings-teacher-grid .w-20 { width: 48px; height: 48px; grid-row: 1 / 3; margin: 0; }
+    #bookings-teacher-grid h3 + span { justify-self: start; margin: 0; }
+    #bookings-teacher-grid .h-3, #bookings-teacher-grid p { grid-column: 1 / -1; }
+    #bookings-teacher-grid .h-3 { margin-top: 20px; }
+    .booking-card > div:first-child { flex-direction: column; gap: 16px; }
+    .booking-card .appointment-time { width: 100%; flex-direction: row; justify-content: space-between; gap: 12px; margin: 0; }
+    .appointment-time .text-2xl { margin: 0; }
+    #bookings-detail-header { padding: 20px; }
+    #bookings-detail-header .w-16 { flex-shrink: 0; width: 48px; height: 48px; }
+    #view-settings > .card-duo, #view-batch > .card-duo { padding: 22px 16px; }
+    #view-settings .space-y-8 > .bg-red-50 { padding: 16px !important; }
+    #view-batch .lg\:col-span-2 > div { padding: 20px 14px; }
+    .input-duo, #slots-modal-container input, .swal2-input, .swal2-textarea { font-size: 16px; }
+    input[type="date"], input[type="time"], input[type="datetime-local"] { width: 100%; min-width: 0; padding-inline: 10px; }
+    #view-settings .grid > div, #view-batch .grid > div { min-width: 0; }
+    #view-teachers > .flex > div { flex-wrap: wrap; }
+    .swal2-container { padding: 12px; }
+    .swal2-popup.swal-saas { width: 100% !important; padding: 20px 16px !important; }
+    .swal-saas .swal2-title { font-size: 22px !important; }
+    #slots-modal-container { padding: 10px; }
+    #slots-modal-container > div { display: grid; grid-template-columns: minmax(0,1fr); }
+    #slots-modal-container > div > div { min-width: 0; width: 100%; }
+    #slots-modal-container > div > div:nth-child(2) { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); }
+    #slots-modal-container input[type="time"] { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

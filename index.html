@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IBSH PTA Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Quicksand:wght@500;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -14,89 +14,41 @@
             theme: { 
                 extend: { 
                     colors: { 
-                        'duo-green': '#58CC02', 
-                        'duo-green-dark': '#46A302', 
-                        'duo-blue': '#1CB0F6',
-                        'duo-blue-dark': '#1899D6',
-                        'duo-red': '#FF4B4B',
-                        'duo-red-dark': '#EA2B2B',
+                        'duo-green': '#356BFF',
+                        'duo-green-dark': '#2458E6',
+                        'duo-blue': '#356BFF',
+                        'duo-blue-dark': '#2458E6',
+                        'duo-red': '#C84049',
+                        'duo-red-dark': '#AF303A',
                         'duo-gray': '#E5E5E5',
                         'duo-text': '#4B4B4B'
                     }, 
                     fontFamily: { 
-                        sans: ['"Nunito"', '"Quicksand"', 'sans-serif'] 
+                        sans: ['Inter', 'sans-serif']
                     } 
                 } 
             } 
         }
     </script>
-    <style>
-        body { background-color: #F7F7F7; color: #4B4B4B; }
-        
-        /* Duolingo Style UI Components */
-        .btn-duo { border-bottom-width: 4px; border-style: solid; transition: all 0.1s ease-in-out; border-radius: 1rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
-        .btn-duo:active { border-bottom-width: 0px; transform: translateY(4px); margin-bottom: 4px; }
-        
-        .card-duo { background-color: white; border: 2px solid #E5E7EB; border-radius: 1.5rem; box-shadow: 0 4px 0 #E5E7EB; transition: transform 0.2s; }
-        
-        .input-duo { background-color: #F3F4F6; border: 2px solid #E5E7EB; border-radius: 1rem; transition: all 0.2s; font-weight: 700; }
-        .input-duo:focus { background-color: white; border-color: #1CB0F6; outline: none; }
-
-
-        .sidebar-item { border: 2px solid transparent; }
-        .sidebar-item.active { background-color: #DDF4C5; color: #58CC02; border: 2px solid #58CC02; }
-        .sidebar-item:hover:not(.active) { background-color: #F3F4F6; }
-
-
-        .mascot-select:hover { transform: scale(1.1) rotate(5deg); }
-        .mascot-select.selected { border-color: #1CB0F6; background-color: #DDF4C5; transform: scale(1.1); }
-        
-        #loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        #loading-overlay.hidden { display: none; }
-        
-        .custom-scroll::-webkit-scrollbar { width: 8px; height: 8px; } 
-        .custom-scroll::-webkit-scrollbar-track { background: transparent; } 
-        .custom-scroll::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; border: 2px solid #fff; }
-        
-        #sidebar { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-
-
-        .swal-saas .swal2-popup { border-radius: 24px !important; border: 2px solid #E5E7EB !important; box-shadow: 0 8px 0 #E5E7EB !important; padding: 32px 24px !important; }
-        .swal-saas .swal2-title { font-family: '"Nunito"', sans-serif !important; font-weight: 900 !important; color: #4B4B4B !important; font-size: 24px !important; }
-        .swal-saas .swal2-confirm { background: #58CC02 !important; border-bottom: 4px solid #46A302 !important; border-radius: 16px !important; font-weight: 800 !important; padding: 12px 32px !important; font-size: 16px !important; transition: all 0.1s!important; }
-        .swal-saas .swal2-confirm:active { transform: translateY(4px)!important; border-bottom-width: 0px!important; margin-bottom: 4px!important;}
-        .swal-saas .swal2-cancel { background: #F3F4F6 !important; color: #9CA3AF !important; border-bottom: 4px solid #E5E7EB !important; border-radius: 16px !important; font-weight: 800 !important; padding: 12px 32px !important; font-size: 16px !important; transition: all 0.1s!important;}
-        .swal-saas .swal2-cancel:active { transform: translateY(4px)!important; border-bottom-width: 0px!important; margin-bottom: 4px!important;}
-        
-        .swal2-container { z-index: 10000 !important; }
-
-
-        @keyframes doodleBounce {
-            0%, 100% { transform: translateY(0) scale(1); }
-            50% { transform: translateY(-15px) scale(1.05); }
-        }
-        .doodle-bounce { animation: doodleBounce 1.5s infinite ease-in-out; }
-    </style>
+    <link rel="stylesheet" href="admin-theme.css">
 </head>
 <body class="font-sans antialiased">
 
 
     <!-- Loading Overlay -->
     <div id="loading-overlay">
-        <div class="text-7xl mb-4 doodle-bounce">🏫</div>
-        <div class="text-xl font-extrabold text-duo-green tracking-wide">Waking up owls...</div>
+        <div class="admin-spinner mb-4" aria-hidden="true"></div>
+        <div class="text-base text-gray-500" role="status">Loading portal…</div>
     </div>
 
 
     <!-- Login Screen -->
     <div id="login-screen" class="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-        <div class="absolute top-10 left-10 text-4xl opacity-20 transform -rotate-12">✨</div>
-        <div class="absolute bottom-20 right-20 text-5xl opacity-20 transform rotate-12"></div>
         
         <div class="card-duo p-8 md:p-10 w-full max-w-md relative z-10 bg-white">
             <div class="text-center mb-6">
-                <div class="text-7xl mb-4 doodle-bounce">🏫</div>      
-                <h1 class="text-3xl font-black text-gray-800 tracking-tight">PTA Open Hour</h1>
+                <div class="portal-icon" aria-hidden="true"><i class="far fa-calendar-check"></i></div>
+                <h1 class="portal-brand">IBSH PTA Open Hour</h1>
                 <p class="text-base text-gray-500 font-bold mt-2">Teacher Portal</p>
             </div>
 
@@ -117,12 +69,11 @@
 
     <!-- Mobile Header -->
     <div id="mobile-header" class="hidden md:hidden fixed top-0 left-0 right-0 bg-white shadow-[0_2px_0_0_#E5E7EB] h-16 z-30 flex items-center gap-4 px-4">
-        <button onclick="admin.toggleSidebar()" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 transition-colors rounded-xl text-gray-600 font-bold border-2 border-gray-200 flex-shrink-0">
+        <button id="menu-toggle" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false" onclick="admin.toggleSidebar()" class="w-10 h-10 bg-gray-100 hover:bg-gray-200 transition-colors rounded-xl text-gray-600 font-bold border-2 border-gray-200 flex-shrink-0">
             <i class="fas fa-bars"></i>
         </button>
         <div class="flex items-center gap-3">
-            <div class="w-10 h-10 bg-[#DDF4C5] rounded-2xl flex items-center justify-center text-2xl border-2 border-duo-green">🏫</div>
-            <h1 class="font-black text-gray-800 text-lg">IBSH PTA</h1>
+            <h1 class="portal-brand">IBSH PTA Open Hour</h1>
         </div>
     </div>
 
@@ -135,9 +86,8 @@
         <aside id="sidebar" class="bg-white w-72 border-r-2 border-gray-200 flex flex-col h-screen fixed top-0 left-0 z-40 transform -translate-x-full md:translate-x-0 md:sticky md:top-0">
             <div class="p-6 border-b-2 border-gray-100 flex flex-col gap-2">
                 <div class="flex items-center gap-4 mb-2">
-                    <div class="w-12 h-12 bg-[#DDF4C5] rounded-2xl flex items-center justify-center text-3xl border-2 border-duo-green shadow-sm transform -rotate-3">🏫</div>
                     <div>
-                        <h1 class="font-black text-gray-800 text-xl tracking-tight">PTA Open Hour</h1>
+                        <h1 class="portal-brand">IBSH PTA Open Hour</h1>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -148,28 +98,28 @@
             <nav class="flex-1 p-4 space-y-3 overflow-y-auto">
                 <p class="text-xs font-extrabold text-gray-400 uppercase tracking-widest mb-2 ml-2">Menu</p>
                 <button onclick="admin.showView('bookings')" id="nav-bookings" class="sidebar-item active w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg">
-                    <div class="w-8 flex justify-center text-2xl">📅</div> Appointments
+                    <span class="nav-icon"><i class="far fa-calendar" aria-hidden="true"></i></span> Appointments
                 </button>
                 
                 <button onclick="if(admin.teacherId) admin.openTeacherModal(admin.teacherId)" id="nav-my-profile" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600 hidden">
-                    <div class="w-8 flex justify-center text-2xl">📝</div> My Info
+                    <span class="nav-icon"><i class="far fa-user" aria-hidden="true"></i></span> My Info
                 </button>
 
 
                 <div id="admin-only-menu" class="space-y-3 hidden">
                     <button onclick="admin.showView('teachers')" id="nav-teachers" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600">
-                        <div class="w-8 flex justify-center text-2xl">🧑‍🏫</div> Teacher List
+                        <span class="nav-icon"><i class="fas fa-users" aria-hidden="true"></i></span> Teacher List
                     </button>
                     <button onclick="admin.showView('batch')" id="nav-batch" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600">
-                        <div class="w-8 flex justify-center text-2xl">✨</div> Magic Scheduler
+                        <span class="nav-icon"><i class="far fa-clock" aria-hidden="true"></i></span> Scheduling
                     </button>
                     
                     <div class="pt-4 mt-4 border-t-2 border-gray-100">
                         <button onclick="admin.showView('logs')" id="nav-logs" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600">
-                            <div class="w-8 flex justify-center text-2xl">📜</div> System Logs
+                            <span class="nav-icon"><i class="far fa-file-lines" aria-hidden="true"></i></span> System Logs
                         </button>
                         <button onclick="admin.showView('settings')" id="nav-settings" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600 mt-3">
-                            <div class="w-8 flex justify-center text-2xl">⚙️</div> Control Room
+                            <span class="nav-icon"><i class="fas fa-sliders" aria-hidden="true"></i></span> Settings
                         </button>
                     </div>
                 </div>
@@ -205,7 +155,7 @@
 
                 <div class="card-duo p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
                     <div>
-                        <h2 class="text-3xl font-black text-gray-800">Who's coming? 🗓️</h2>
+                        <h2 class="text-3xl font-black text-gray-800">Appointments</h2>
                         <p class="text-base text-gray-500 font-bold mt-1">Here are all the upcoming appointments.</p>
                     </div>
                     <div class="flex gap-3 w-full md:w-auto flex-wrap">
@@ -256,8 +206,8 @@
             <div id="view-teachers" class="hidden space-y-6">
                 <div class="card-duo p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
                     <div>
-                        <h2 class="text-3xl font-black text-gray-800">Our Awesome Team 🦸‍♂️</h2>
-                        <p class="text-base text-gray-500 font-bold mt-1">Manage teacher profiles and mascots.</p>
+                        <h2 class="text-3xl font-black text-gray-800">Teacher List</h2>
+                        <p class="text-base text-gray-500 font-bold mt-1">Manage teacher profiles and availability.</p>
                     </div>
                     
                     <div class="flex flex-col md:flex-row gap-3 w-full md:w-auto mt-4 md:mt-0 items-center">
@@ -303,8 +253,7 @@
             <div id="view-batch" class="hidden space-y-6">
                 <div class="card-duo p-6 md:p-8 bg-white">
                     <h2 class="text-3xl font-black text-gray-800 mb-8 flex items-center gap-3">
-                        <div class="w-12 h-12 bg-[#FFF4CC] rounded-2xl flex items-center justify-center text-2xl border-2 border-[#FFC800]">✨</div> 
-                        Magic Scheduler
+                        Scheduling
                     </h2>
                     
                     <div class="grid grid-cols-1 lg:grid-cols-5 gap-8">
@@ -322,7 +271,6 @@
                         
                         <div class="lg:col-span-2">
                             <div class="bg-white border-2 border-[#1CB0F6] rounded-3xl p-6 shadow-[0_4px_0_0_#1CB0F6] relative h-fit">
-                                <div class="absolute -top-4 -right-4 text-3xl transform rotate-12">⚙️</div>
                                 <h3 class="font-black text-xl text-[#1899D6] mb-6">2. Set the Time</h3>
                                 <div class="space-y-5">
                                     <div><label class="text-xs font-extrabold text-gray-500 uppercase tracking-widest block mb-2">Date</label><input id="batch-date" type="date" class="input-duo w-full p-4"></div>
@@ -340,7 +288,7 @@
                                             <span class="text-sm font-extrabold text-duo-green-dark uppercase">Selected:</span>
                                             <span id="batch-selected-count" class="text-xl font-black text-duo-green">0</span>
                                         </div>
-                                        <button onclick="admin.runBatch()" class="btn-duo w-full bg-[#1CB0F6] text-white border-[#1899D6] py-4 text-lg">POOF! Generate 🪄</button>
+                                        <button onclick="admin.runBatch()" class="btn-duo w-full bg-[#1CB0F6] text-white border-[#1899D6] py-4 text-lg">Generate Time Slots</button>
                                     </div>
                                 </div>
                             </div>
@@ -355,7 +303,6 @@
                 <div class="card-duo p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
                     <div>
                         <h2 class="text-3xl font-black text-gray-800 flex items-center gap-3">
-                            <div class="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-2xl border-2 border-gray-300">📜</div>
                             System Logs
                         </h2>
                         <p class="text-base text-gray-500 font-bold mt-1">Track everything that happens in the system.</p>
@@ -387,13 +334,12 @@
             <div id="view-settings" class="hidden space-y-6 pb-20">
                 <div class="card-duo p-8 md:p-10 max-w-3xl mx-auto bg-white">
                     <h2 class="text-3xl font-black text-gray-800 mb-8 flex items-center gap-3">
-                        <div class="w-12 h-12 bg-gray-100 rounded-2xl flex items-center justify-center text-2xl border-2 border-gray-300">🎛️</div> 
-                        Control Room
+                        Settings
                     </h2>
                     
                     <div class="space-y-8">
                         <div class="bg-blue-50 border-2 border-[#1CB0F6] rounded-3xl p-6 shadow-[0_4px_0_0_#1CB0F6]">
-                            <h3 class="text-lg font-black text-[#1899D6] mb-2"><i class="fas fa-clock mr-2"></i> The Great Clock</h3>
+                            <h3 class="text-lg font-black text-[#1899D6] mb-2"><i class="fas fa-clock mr-2"></i> Booking Window</h3>
                             <p class="text-sm font-bold text-blue-600 mb-5">Set when parents can start and stop booking.</p>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div><label class="block text-sm font-extrabold text-gray-500 uppercase tracking-widest mb-2">Doors Open</label><input id="setting-start" type="datetime-local" class="input-duo w-full p-4"></div>
@@ -433,7 +379,7 @@
 
 
                         <div class="card-duo p-6 bg-white border-2 border-gray-200">
-                            <h3 class="text-lg font-black text-gray-800 mb-2"><i class="fas fa-plug text-duo-green mr-2"></i> Magic Wires (GAS)</h3>
+                            <h3 class="text-lg font-black text-gray-800 mb-2"><i class="fas fa-plug text-duo-green mr-2"></i> Email Integration (GAS)</h3>
                             <p class="text-sm font-bold text-gray-500 mb-4">Where do the confirmation emails come from?</p>
                             <input id="setting-gas-url" type="url" class="input-duo w-full p-4 font-mono text-sm mb-4" placeholder="https://script.google.com/macros/s/.../exec">
                             <button onclick="admin.testGAS()" class="btn-duo bg-white text-duo-green border-2 border-gray-200 border-b-4 hover:border-duo-green px-5 py-3">
@@ -452,7 +398,7 @@
 
 
                         <div class="pt-4">
-                            <button onclick="admin.saveSettings()" class="btn-duo w-full bg-duo-green text-white border-duo-green-dark py-4 text-xl">Save All Settings 💾</button>
+                            <button onclick="admin.saveSettings()" class="btn-duo w-full bg-duo-green text-white border-duo-green-dark py-4 text-xl">Save All Settings</button>
                         </div>
                     </div>
                 </div>
@@ -484,12 +430,14 @@
         });
 
 
-        const getMascotSVG = (id) => { 
-            const animals = ['🦊', '🐱', '🐼', '🐨', '🐶', '🐰', '🐯', '🐻', '🐮', '🐷', '🐸', '🐵', '🦄', '🦖', '🐙', '🦉'];
-            const colors = ['#FFD1DC', '#FFDFBA', '#FFFFBA', '#BAFFC9', '#BAE1FF', '#E8BAFF', '#FFDFD3', '#F4F4F8', '#E2F0CB', '#FFB7B2', '#C7CEEA', '#B5EAD7', '#FF9CEE', '#B2FBA5', '#84D8FF', '#DDF4C5'];
-            const borders = ['#FF9EBB', '#FFB56B', '#E5E56B', '#6BE58B', '#6BA4FF', '#CA6BFF', '#FF9E8B', '#D1D1E0', '#B0D878', '#FF7A70', '#8F9DE3', '#72D1AC', '#FF5CE5', '#60E540', '#40B8FF', '#58CC02'];
-            const i = id % animals.length;
-            return `<svg viewBox="0 0 100 100" class="w-full h-full"><circle cx="50" cy="50" r="46" fill="${colors[i]}" stroke="${borders[i]}" stroke-width="8"/><text x="50" y="68" font-size="45" text-anchor="middle">${animals[i]}</text></svg>`; 
+        const getTeacherAvatar = (teacher) => {
+            const name = (teacher.name || '').trim();
+            const parts = name.split(/\s+/);
+            const initials = (parts.length > 1 ? parts.slice(0, 2).map(p => Array.from(p)[0]).join('') : Array.from(name).slice(0, 2).join('')).toUpperCase() || 'T';
+            if (teacher.image && /^(https:\/\/|data:image\/)/i.test(teacher.image)) {
+                return `<img src="${escapeHtml(teacher.image)}" class="teacher-photo" alt="${escapeHtml(name)}">`;
+            }
+            return `<span class="teacher-initials" aria-hidden="true">${escapeHtml(initials)}</span>`;
         };
 
 
@@ -507,7 +455,7 @@
             console.log('🔗 callGAS:', { url: url ? url.substring(0, 50) + '...' : '❌ EMPTY', action: payload.action });
             if (!url || url.includes('YOUR_SCRIPT_ID')) {
                 console.error('❌ GAS URL is empty or not configured!');
-                return { ok: false, error: "GAS URL not set. Go to Settings → Magic Wires to configure." };
+                return { ok: false, error: "GAS URL not set. Go to Settings → Email Integration to configure." };
             }
             // ✅ 自動附加 secret + admin token
             payload.secret = GAS_SECRET;
@@ -681,10 +629,13 @@
             },
 
 
-            toggleSidebar() {
+            toggleSidebar(forceOpen) {
                 const sb = document.getElementById('sidebar'); const ov = document.getElementById('sidebar-overlay');
-                if (sb.classList.contains('-translate-x-full')) { sb.classList.remove('-translate-x-full'); ov.classList.remove('hidden'); }
-                else { sb.classList.add('-translate-x-full'); ov.classList.add('hidden'); }
+                const open = typeof forceOpen === 'boolean' ? forceOpen : sb.classList.contains('-translate-x-full');
+                sb.classList.toggle('-translate-x-full', !open);
+                ov.classList.toggle('hidden', !open);
+                document.getElementById('menu-toggle').setAttribute('aria-expanded', String(open));
+                document.getElementById('menu-toggle').setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
             },
 
 
@@ -795,7 +746,7 @@
                 if (viewId==='teachers') this.renderTeachers();
                 // ✅ 點進 Logs 頁面才啟動監聽（lazy load）
                 if (viewId==='logs' && !this.unsubscribeLogs) this.initLogsListener();
-                if (window.innerWidth < 768) this.toggleSidebar();
+                if (window.innerWidth < 768) this.toggleSidebar(false);
             },
 
 
@@ -840,7 +791,7 @@
 
                 let html = '';
                 [...filtered].sort((a,b)=>(a.subject||'').localeCompare(b.subject||'')||(a.name||'').localeCompare(b.name||'')).forEach(t => {
-                    const imgHtml = t.image ? `<img src="${t.image}" class="w-full h-full object-cover rounded-full border-4 border-white shadow-sm">` : getMascotSVG(t.mascot||0);
+                    const imgHtml = getTeacherAvatar(t);
                     html += `
                     <div class="card-duo p-5 flex flex-col items-center text-center relative hover:-translate-y-1 transition bg-white group">
                         <label class="absolute top-4 left-4 z-10 cursor-pointer group/cb">
@@ -848,12 +799,12 @@
                             <div class="w-6 h-6 rounded-lg border-2 border-gray-200 bg-white peer-checked:bg-duo-red peer-checked:border-duo-red-dark flex items-center justify-center text-transparent peer-checked:text-white transition shadow-sm group-hover/cb:border-duo-red"><i class="fas fa-check text-xs"></i></div>
                         </label>
                         <div class="absolute top-4 right-4 flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onclick="admin.openTeacherModal('${t.id}')" class="w-10 h-10 rounded-xl bg-blue-100 text-duo-blue hover:bg-duo-blue hover:text-white transition flex items-center justify-center font-bold border-2 border-transparent hover:border-duo-blue-dark"><i class="fas fa-pen"></i></button>
-                            <button onclick="admin.deleteTeacher('${t.id}')" class="w-10 h-10 rounded-xl bg-red-100 text-duo-red hover:bg-duo-red hover:text-white transition flex items-center justify-center font-bold border-2 border-transparent hover:border-duo-red-dark"><i class="fas fa-trash"></i></button>
+                            <button aria-label="Edit ${escapeHtml(t.name)}" onclick="admin.openTeacherModal('${t.id}')" class="w-10 h-10 rounded-xl bg-blue-100 text-duo-blue hover:bg-duo-blue hover:text-white transition flex items-center justify-center font-bold border-2 border-transparent hover:border-duo-blue-dark"><i class="fas fa-pen"></i></button>
+                            <button aria-label="Delete ${escapeHtml(t.name)}" onclick="admin.deleteTeacher('${t.id}')" class="w-10 h-10 rounded-xl bg-red-100 text-duo-red hover:bg-duo-red hover:text-white transition flex items-center justify-center font-bold border-2 border-transparent hover:border-duo-red-dark"><i class="fas fa-trash"></i></button>
                         </div>
                         <div class="w-24 h-24 rounded-full mb-4 shadow-sm">${imgHtml}</div>
-                        <h3 class="font-black text-xl text-gray-800 mb-1">${t.name}</h3>
-                        <span class="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-lg font-extrabold uppercase tracking-widest border-2 border-gray-200 mb-4">${t.subject}</span>
+                        <h3 class="font-black text-xl text-gray-800 mb-1">${escapeHtml(t.name)}</h3>
+                        <span class="bg-gray-100 text-gray-600 text-xs px-3 py-1 rounded-lg font-extrabold uppercase tracking-widest border-2 border-gray-200 mb-4">${escapeHtml(t.subject)}</span>
                         <button onclick="admin.openManageSlotsModal('${t.id}')" class="btn-duo w-full bg-white text-duo-green border-2 border-gray-200 border-b-4 hover:border-duo-green py-3 text-sm mt-auto"><i class="far fa-clock mr-1 text-lg align-middle"></i> Manage Slots</button>
                     </div>`;
                 });
@@ -863,7 +814,9 @@
 
             async openManageSlotsModal(tid) {
                 const t = this.data.teachers.find(x => x.id === tid);
-                Swal.fire({title: 'Loading...', customClass:{popup:'swal-saas'}, didOpen: () => Swal.showLoading()});
+                Swal.fire({title: 'Loading...', customClass:{popup:'swal-saas'}, didOpen: (popup) => {
+                    if (popup === Swal.getPopup()) Swal.showLoading();
+                }});
                 try {
                     const sRef = collection(this.db, `${this.paths.teachersCollection}/${tid}/slots`);
                     const snap = await getDocs(sRef);
@@ -879,11 +832,11 @@
 
 
                     await Swal.fire({
-                        title: `${t.name}'s Time Slots 🗓️`,
+                        titleText: `${t.name}'s Time Slots`,
                         html: `<div class="text-left bg-gray-50 p-3 md:p-5 rounded-2xl border-2 border-gray-200 mt-4 max-h-[50vh] overflow-y-auto custom-scroll" id="slots-modal-container"></div>
                                <button onclick="admin.addSlotRow()" class="btn-duo w-full bg-white text-duo-blue border-2 border-gray-200 border-b-4 hover:border-duo-blue py-3 text-sm mt-4"><i class="fas fa-plus mr-1"></i> Add Time Slot</button>`,
                         width: '700px', showCancelButton: true, confirmButtonText: 'Save All', confirmButtonColor: '#58CC02', customClass: { popup: 'swal-saas' },
-                        didOpen: () => this.renderSlotRows(),
+                        didOpen: () => { Swal.hideLoading(); this.renderSlotRows(); },
                         preConfirm: () => {
                             for (let s of this.modalSlots) {
                                 if (!s.date || !s.start || !s.end) { Swal.showValidationMessage('請將所有日期和時間填寫完整，或刪除空白行。'); return false; }
@@ -920,7 +873,7 @@
                         <div class="ml-auto flex items-center justify-end min-w-[50px]">
                             ${isBooked ? `<span class="text-[10px] uppercase font-extrabold px-2 py-1 rounded-lg tracking-widest bg-red-100 text-duo-red border border-red-200">Booked</span>`
                                        : isLocked ? `<span class="text-[10px] uppercase font-extrabold px-2 py-1 rounded-lg tracking-widest bg-yellow-100 text-yellow-600 border border-yellow-200">Locking...</span>`
-                                       : `<button onclick="admin.removeSlotRow(${idx})" class="w-8 h-8 rounded-lg bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-duo-red hover:border-duo-red border-2 border-transparent transition flex items-center justify-center"><i class="fas fa-times"></i></button>`}
+                                       : `<button aria-label="Remove time slot" onclick="admin.removeSlotRow(${idx})" class="w-8 h-8 rounded-lg bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-duo-red hover:border-duo-red border-2 border-transparent transition flex items-center justify-center"><i class="fas fa-times"></i></button>`}
                         </div>
                     </div>`;
                 });
@@ -1111,7 +1064,7 @@
                                 // ✨ 優化 1：存入前強制轉小寫
                                 email: (rowData.email || '').toString().trim().toLowerCase(),
                                 note: (rowData.note || '').toString().trim(),
-                                mascot: Math.floor(Math.random() * 16), image: ''
+                                image: ''
                             });
                             successCount++;
                         }
@@ -1131,47 +1084,58 @@
                 let allSubj = [];
                 this.data.teachers.forEach(teacher => { if(teacher.subject) teacher.subject.split(',').forEach(s => allSubj.push(s.trim())); });
                 const allAvailableSubjects = [...new Set([...this.subjects, ...allSubj])].sort();
-                const opts = allAvailableSubjects.map(s=>`<option value="${s}">`).join('');
-                const animalOptionsHtml = Array.from({length: 16}, (_, i) => `<div class="w-16 h-16 flex-shrink-0 cursor-pointer border-4 border-transparent hover:border-gray-200 rounded-2xl mascot-select transition ${(!t.image&&(t.mascot||0)==i)?'selected !border-duo-blue':''}" onclick="window.selectMascot(this,${i})">${getMascotSVG(i)}</div>`).join('');
+                const opts = allAvailableSubjects.map(s=>`<option value="${escapeHtml(s)}">`).join('');
 
 
                 await Swal.fire({
-                    title: isEdit ? 'Edit Profile ✏️' : 'New Teacher 🌟',
+                    title: isEdit ? 'Edit Profile' : 'New Teacher',
                     html: `<div class="space-y-6 text-left p-2">
                         <div class="flex flex-col items-center justify-center mb-6">
-                            <div class="w-32 h-32 rounded-[2rem] bg-gray-50 border-4 border-gray-200 overflow-hidden relative group cursor-pointer shadow-sm hover:border-duo-blue transition" onclick="document.getElementById('swal-file').click()">
-                                <img id="preview-img" src="${t.image||''}" class="w-full h-full object-cover ${t.image?'':'hidden'}">
-                                <div id="preview-mascot" class="w-full h-full p-2 ${t.image?'hidden':''}">${getMascotSVG(t.mascot||0)}</div>
-                                <div class="absolute inset-0 bg-black/60 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition font-black text-lg backdrop-blur-sm">Upload</div>
-                            </div>
+                            <button type="button" class="profile-photo-button" aria-label="Upload teacher photo" onclick="document.getElementById('swal-file').click()">
+                                <img id="preview-img" ${t.image ? `src="${escapeHtml(t.image)}"` : ''} alt="Teacher photo" class="w-full h-full object-cover ${t.image?'':'hidden'}">
+                                <span id="preview-initials" class="w-full h-full ${t.image?'hidden':''}">${getTeacherAvatar({name:t.name})}</span>
+                            </button>
                             <input type="file" id="swal-file" class="hidden" accept="image/*" onchange="window.handleFileSelect(this)">
+                            <div class="photo-controls"><button type="button" onclick="document.getElementById('swal-file').click()">Upload photo</button><button type="button" onclick="window.removeTeacherPhoto()">Use initials</button></div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div><label class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">Name</label><input id="swal-name" class="input-duo w-full p-4" value="${t.name||''}" placeholder="Mr. Owl"></div>
+                            <div><label for="swal-name" class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">Name</label><input id="swal-name" class="input-duo w-full p-4" value="${escapeHtml(t.name)}" placeholder="Teacher name"></div>
                             <div>
-                                <label class="text-xs font-extrabold text-gray-400 mb-2 flex items-center justify-between uppercase tracking-widest">
+                                <label for="swal-subject" class="text-xs font-extrabold text-gray-400 mb-2 flex items-center justify-between uppercase tracking-widest">
                                     <span>Subject</span><span class="normal-case text-[10px] text-duo-blue tracking-normal">可用逗號分隔多科</span>
                                 </label>
-                                <input id="swal-subject" list="subject-list" class="input-duo w-full p-4" value="${t.subject||''}" placeholder="e.g. Math, Science"><datalist id="subject-list">${opts}</datalist>
+                                <input id="swal-subject" list="subject-list" class="input-duo w-full p-4" value="${escapeHtml(t.subject)}" placeholder="e.g. Math, Science"><datalist id="subject-list">${opts}</datalist>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                            <div><label class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">Location</label><input id="swal-location" class="input-duo w-full p-4" value="${t.location||''}" placeholder="Room 101"></div>
-                            <div><label class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">Email</label><input id="swal-email" type="email" class="input-duo w-full p-4" value="${t.email||''}" placeholder="owl@ibsh.tw"></div>
+                            <div><label for="swal-location" class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">Location</label><input id="swal-location" class="input-duo w-full p-4" value="${escapeHtml(t.location)}" placeholder="Room 101"></div>
+                            <div><label for="swal-email" class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">Email</label><input id="swal-email" type="email" class="input-duo w-full p-4" value="${escapeHtml(t.email)}" placeholder="teacher@ibsh.tw"></div>
                         </div>
-                        <div class="mt-4"><label class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">Note / Intro</label><textarea id="swal-note" rows="2" class="input-duo w-full p-4" placeholder="Brief introduction or notes...">${t.note||''}</textarea></div>
-                        <div class="mt-4"><label class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">No Slots Message (Optional)</label><p class="text-[10px] font-bold text-gray-400 mb-2">Message to show when there are no available time slots.</p><textarea id="swal-no-slots-msg" rows="2" class="input-duo w-full p-4" placeholder="e.g., I am fully booked. Please email me directly.">${t.noSlotsMessage||''}</textarea></div>
-                        <div class="mt-6 pt-6 border-t-2 border-gray-100 bg-gray-50 -mx-6 px-6 pb-4 rounded-b-2xl">
-                            <label class="text-xs font-extrabold text-gray-400 mb-4 block uppercase tracking-widest pt-2">Choose an Avatar</label>
-                            <div class="flex gap-4 overflow-x-auto pb-4 custom-scroll px-1" id="mascot-selector">${animalOptionsHtml}</div>
-                            <input type="hidden" id="swal-mascot" value="${t.mascot||0}">
-                            <input type="hidden" id="swal-image-data" value="${t.image||''}">
-                        </div>
+                        <div class="mt-4"><label for="swal-note" class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">Note / Intro</label><textarea id="swal-note" rows="2" class="input-duo w-full p-4" placeholder="Brief introduction or notes...">${escapeHtml(t.note)}</textarea></div>
+                        <div class="mt-4"><label for="swal-no-slots-msg" class="text-xs font-extrabold text-gray-400 mb-2 block uppercase tracking-widest">No Slots Message (Optional)</label><p class="text-[10px] font-bold text-gray-400 mb-2">Message to show when there are no available time slots.</p><textarea id="swal-no-slots-msg" rows="2" class="input-duo w-full p-4" placeholder="e.g., I am fully booked. Please email me directly.">${escapeHtml(t.noSlotsMessage)}</textarea></div>
+                        <input type="hidden" id="swal-image-data" value="${escapeHtml(t.image)}">
                     </div>`,
                     width: '700px', customClass: { popup: 'swal-saas !p-0 overflow-hidden' }, showCancelButton: true, confirmButtonText: 'Save Profile',
                     didOpen: () => {
-                        window.handleFileSelect = async (inp) => { if(inp.files[0]){const b64=await compressImage(inp.files[0]); document.getElementById('preview-img').src=b64; document.getElementById('preview-img').classList.remove('hidden'); document.getElementById('preview-mascot').classList.add('hidden'); document.getElementById('swal-image-data').value=b64; document.querySelectorAll('.mascot-select').forEach(e=>e.classList.remove('selected','!border-duo-blue')); } };
-                        window.selectMascot = (el,id) => { document.querySelectorAll('.mascot-select').forEach(e=>e.classList.remove('selected','!border-duo-blue')); el.classList.add('selected','!border-duo-blue'); document.getElementById('swal-mascot').value=id; document.getElementById('swal-image-data').value=''; document.getElementById('preview-img').classList.add('hidden'); document.getElementById('preview-mascot').classList.remove('hidden'); document.getElementById('preview-mascot').innerHTML=getMascotSVG(id); };
+                        const updateInitials = () => { document.getElementById('preview-initials').innerHTML = getTeacherAvatar({name:document.getElementById('swal-name').value}); };
+                        document.getElementById('swal-name').addEventListener('input', updateInitials);
+                        window.handleFileSelect = async (inp) => {
+                            if (!inp.files[0]) return;
+                            try {
+                                const b64 = await compressImage(inp.files[0]);
+                                document.getElementById('preview-img').src = b64;
+                                document.getElementById('preview-img').classList.remove('hidden');
+                                document.getElementById('preview-initials').classList.add('hidden');
+                                document.getElementById('swal-image-data').value = b64;
+                            } catch { Swal.showValidationMessage('Unable to read this photo. Please choose a JPG or PNG image.'); }
+                        };
+                        window.removeTeacherPhoto = () => {
+                            document.getElementById('swal-image-data').value = '';
+                            document.getElementById('swal-file').value = '';
+                            document.getElementById('preview-img').classList.add('hidden');
+                            document.getElementById('preview-initials').classList.remove('hidden');
+                            updateInitials();
+                        };
                     },
                     preConfirm: () => { 
                         const n=document.getElementById('swal-name').value; const s=document.getElementById('swal-subject').value; 
@@ -1181,7 +1145,7 @@
                             // ✨ 優化 1：存入前強制轉小寫
                             email:document.getElementById('swal-email').value.toLowerCase().trim(), 
                             note:document.getElementById('swal-note').value, noSlotsMessage:document.getElementById('swal-no-slots-msg').value, 
-                            mascot:parseInt(document.getElementById('swal-mascot').value), image:document.getElementById('swal-image-data').value
+                            image:document.getElementById('swal-image-data').value
                         }; 
                     }
                 }).then(async r => { 
@@ -1337,9 +1301,9 @@
                 const gradeHtml = safeGrade ? `<span class="mx-2 text-gray-300">|</span> <span class="bg-purple-100 text-purple-600 text-xs px-2 py-0.5 rounded-lg font-extrabold border border-purple-200">${safeGrade}</span>` : '';
 
                 return `
-                    <div class="card-duo p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 bg-white hover:-translate-y-1 transition-transform">
+                    <div class="booking-card card-duo p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-5 bg-white hover:-translate-y-1 transition-transform">
                         <div class="flex items-start gap-5 w-full md:w-auto flex-1">
-                            <div class="bg-[#DDF4C5] text-duo-green-dark rounded-2xl p-3 flex flex-col items-center justify-center min-w-[90px] border-2 border-duo-green shadow-sm mt-1">
+                            <div class="appointment-time bg-[#DDF4C5] text-duo-green-dark rounded-2xl p-3 flex flex-col items-center justify-center min-w-[90px] border-2 border-duo-green shadow-sm mt-1">
                                 <span class="text-xs font-black uppercase tracking-widest">${safeDate}</span>
                                 <span class="text-2xl font-black mt-1 tracking-tight">${safeTime}</span>
                             </div>
@@ -1398,12 +1362,12 @@
                 sorted.forEach(t => {
                     const booked = bookingCountMap[t.id] || 0;
                     const total = slotCountMap[t.id] || 0;
-                    const imgHtml = t.image ? `<img src="${t.image}" class="w-full h-full object-cover rounded-full border-4 border-white shadow-sm">` : getMascotSVG(t.mascot||0);
+                    const imgHtml = getTeacherAvatar(t);
                     const pct = total > 0 ? Math.round(booked / total * 100) : 0;
                     const barColor = pct >= 80 ? 'bg-duo-red' : pct >= 40 ? 'bg-[#FFC800]' : 'bg-duo-green';
 
                     html += `
-                    <div onclick="admin.showTeacherBookings('${t.id}')" class="card-duo p-6 flex flex-col items-center text-center cursor-pointer hover:-translate-y-1 transition bg-white group">
+                    <button type="button" onclick="admin.showTeacherBookings('${t.id}')" class="card-duo p-6 flex flex-col items-center text-center cursor-pointer hover:-translate-y-1 transition bg-white group">
                         <div class="w-20 h-20 rounded-full mb-3 shadow-sm">${imgHtml}</div>
                         <h3 class="font-black text-lg text-gray-800 mb-1">${escapeHtml(t.name)}</h3>
                         <span class="bg-gray-100 text-gray-600 text-[10px] px-3 py-1 rounded-lg font-extrabold uppercase tracking-widest border-2 border-gray-200 mb-3">${escapeHtml(t.subject || '')}</span>
@@ -1414,7 +1378,7 @@
                             <span class="text-duo-blue text-lg">${booked}</span> <span class="text-gray-400">/</span> <span class="text-lg">${total}</span>
                             <span class="text-xs font-bold text-gray-400 ml-1">booked</span>
                         </p>
-                    </div>`;
+                    </button>`;
                 });
                 grid.innerHTML = html;
             },
@@ -1429,7 +1393,7 @@
                 document.getElementById('bookings-list-container').classList.add('hidden');
                 document.getElementById('bookings-detail-container').classList.remove('hidden');
 
-                const imgHtml = t.image ? `<img src="${t.image}" class="w-full h-full object-cover rounded-full border-4 border-white shadow-sm">` : getMascotSVG(t.mascot||0);
+                const imgHtml = getTeacherAvatar(t);
                 document.getElementById('bookings-detail-header').innerHTML = `
                     <div class="flex items-center gap-5">
                         <div class="w-16 h-16 rounded-full shadow-sm">${imgHtml}</div>
@@ -1683,7 +1647,7 @@
                     container.innerHTML+=`
                     <label class="flex items-center gap-2 bg-white p-3 rounded-2xl cursor-pointer border-2 border-gray-200 hover:border-[#1CB0F6] transition shadow-sm group">
                         <input type="checkbox" class="peer sr-only batch-checkbox" value="${t.id}" onchange="admin.updateBatchCount()">
-                        <div class="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm">${t.image?`<img src="${t.image}" class="w-full h-full object-cover">`:getMascotSVG(t.mascot||0)}</div>
+                        <div class="w-10 h-10 rounded-full bg-gray-100 overflow-hidden flex-shrink-0 border-2 border-white shadow-sm">${getTeacherAvatar(t)}</div>
                         <div class="truncate flex-1">
                             <div class="font-black text-sm text-gray-800 truncate">${t.name}</div>
                             <div class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">${t.subject}</div>
