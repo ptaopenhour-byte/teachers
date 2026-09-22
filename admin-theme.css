@@ -90,7 +90,9 @@ input.peer:focus-visible + div { outline: 3px solid #a8c0ff; outline-offset: 3px
 #view-batch .lg\:col-span-3 > div:first-child { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
 #view-batch .lg\:col-span-3 > div:first-child > div { flex-wrap: wrap; }
 #view-batch h3 { font-size: 17px; }
-#batch-teacher-list { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+/* Scheduling uses document scrolling, including when the teacher list is long. */
+#dashboard > main:has(#view-batch:not(.hidden)) { overflow: visible; }
+#batch-teacher-list { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; max-height: none; overflow: visible; }
 #batch-teacher-list label { border-width: 1px; border-radius: 8px; box-shadow: none; min-width: 0; }
 #batch-teacher-list label:has(input:checked) { border-color: #9eb6f8; background: #f0f5ff; }
 #batch-teacher-list .teacher-initials { font-size: 14px; }
