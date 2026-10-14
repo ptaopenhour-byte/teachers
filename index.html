@@ -340,7 +340,10 @@
                     <div class="space-y-8">
                         <div class="bg-blue-50 border-2 border-[#1CB0F6] rounded-3xl p-6 shadow-[0_4px_0_0_#1CB0F6]">
                             <h3 class="text-lg font-black text-[#1899D6] mb-2"><i class="fas fa-clock mr-2"></i> Booking Window</h3>
-                            <p class="text-sm font-bold text-blue-600 mb-5">Set when parents can start and stop booking.</p>
+                            <p class="text-sm font-bold text-blue-600 mb-5">Asia/Taipei time. Pause and save before changing schedules or activity ID.</p>
+                            <label class="block text-sm mb-2" for="setting-event">Activity ID (e.g. 2026-fall)</label>
+                            <input id="setting-event" class="input-duo w-full p-4 mb-4" placeholder="2026-fall" pattern="[A-Za-z0-9_-]+">
+                            <label class="flex items-center gap-3 mb-5"><input type="checkbox" id="setting-enabled"> Enable bookings during the window (unchecked = paused)</label>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div><label class="block text-sm font-extrabold text-gray-500 uppercase tracking-widest mb-2">Doors Open</label><input id="setting-start" type="datetime-local" class="input-duo w-full p-4"></div>
                                 <div><label class="block text-sm font-extrabold text-gray-500 uppercase tracking-widest mb-2">Doors Close</label><input id="setting-end" type="datetime-local" class="input-duo w-full p-4"></div>
@@ -390,9 +393,9 @@
 
                         <div class="bg-red-50 border-2 border-duo-red rounded-3xl p-6 shadow-[0_4px_0_0_#FF4B4B]">
                             <h3 class="text-lg font-black text-duo-red mb-2"><i class="fas fa-triangle-exclamation mr-2"></i> Booking Reset</h3>
-                            <p class="text-sm font-bold text-red-600 mb-5">Delete every parent booking record and every teacher slot. Teacher profiles stay.</p>
+                            <p class="text-sm font-bold text-red-600 mb-5">Keep historical bookings and quotas. Use a new Activity ID for a new event.</p>
                             <button onclick="admin.clearAllTeacherBookSlotRecords()" class="btn-duo w-full bg-duo-red text-white border-duo-red-dark py-4 text-base md:text-lg">
-                                <i class="fas fa-trash-can mr-2"></i> Clear All Slots & Bookings
+                                <i class="fas fa-trash-can mr-2"></i> Start a New Activity
                             </button>
                         </div>
 
@@ -447,34 +450,27 @@
         }
 
 
-        // ✅ GAS Secret Token（必須和 GAS 端的 CONFIG.API_SECRET 一致）
-        const GAS_SECRET = "artmrmbniemmoegrgr";
-
         async function callGAS(payload) {
-            const url = admin.gasUrl;
-            console.log('🔗 callGAS:', { url: url ? url.substring(0, 50) + '...' : '❌ EMPTY', action: payload.action });
-            if (!url || url.includes('YOUR_SCRIPT_ID')) {
-                console.error('❌ GAS URL is empty or not configured!');
-                return { ok: false, error: "GAS URL not set. Go to Settings → Email Integration to configure." };
-            }
-            // ✅ 自動附加 secret + admin token
-            payload.secret = GAS_SECRET;
-            payload.adminToken = GAS_SECRET + "-ADMIN";
+            const url = admin.gasUrl || document.getElementById('setting-gas-url')?.value.trim();
+            if (!/^https:\/\/script.google.com\/macros\/s\/[^/]+\/exec$/.test(url || '')) return {ok:false,error:'Set a valid GAS Web App /exec URL in Settings.'};
             try {
-                const res = await fetch(url, { method: "POST", headers: { "Content-Type": "text/plain" }, body: JSON.stringify(payload) });
-                const text = await res.text();
-                console.log('📨 GAS raw response:', text.substring(0, 200));
-                try { return JSON.parse(text); }
-                catch(parseErr) {
-                    console.error('❌ GAS returned non-JSON:', text.substring(0, 500));
-                    return { ok: false, error: "GAS returned invalid response. Check GAS deployment." };
-                }
-            } catch(err) {
-                console.error('❌ callGAS fetch error:', err);
-                return { ok: false, error: err.message };
-            }
+                const idToken = await admin.auth.currentUser.getIdToken();
+                const response = await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({...payload,idToken})});
+                const result = await response.json();
+                if(result.apiVersion !== 3) return {ok:false,error:'Deploy backend V3 before using this page.'};
+                return result;
+            } catch(e) { return {ok:false,uncertain:true,error:'Connection interrupted. Refresh records before retrying. The previous operation may have succeeded.'}; }
         }
-
+        async function backend(payload) {
+            const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload))))).map(n=>n.toString(16).padStart(2,'0')).join('');
+            const key = 'pta-operation-'+admin.auth.currentUser.uid+'-'+digest;
+            const requestId = sessionStorage.getItem(key)||crypto.randomUUID();
+            sessionStorage.setItem(key,requestId);
+            const result = await callGAS({...payload,requestId});
+            if(!result.uncertain)sessionStorage.removeItem(key);
+            if(!result.ok)throw new Error(result.error||'Request failed');
+            return result;
+        }
 
         const admin = {
             db: null, auth: null, storage: null, gasUrl: "",
@@ -521,11 +517,13 @@
                         // ✅ 登入成功後才開始讀取 Firebase 資料（省下未登入的讀取）
                         this.initConfigListener();
                         this.loadBookings();
+                        if(this.userRole==='admin')this.watchNotifications();
                         this.loadTeachers();
                         // ✅ Logs 不再自動載入，改為點進 Logs 頁面才載入（省 500 reads/次）
                         this.startIdleDetection();
                     } else {
                         // ✅ 登出時取消所有監聽，停止 Firebase 讀取
+                        if (this.unsubscribeNotifications) { this.unsubscribeNotifications(); this.unsubscribeNotifications = null; }
                         if (this.unsubscribeConfig) { this.unsubscribeConfig(); this.unsubscribeConfig = null; }
                         if (this.unsubscribeLogs) { this.unsubscribeLogs(); this.unsubscribeLogs = null; }
                         document.getElementById('login-screen').classList.remove('hidden');
@@ -543,6 +541,9 @@
                 this.unsubscribeConfig = onSnapshot(doc(this.db, this.paths.config), (s) => {
                     if (s.exists()) {
                         const d = s.data();
+                        this.currentEventId = d.eventId || '';
+                        document.getElementById('setting-event').value = this.currentEventId;
+                        document.getElementById('setting-enabled').checked = d.enabled === true;
                         const ln = document.getElementById('login-notice'), lnt = document.getElementById('login-notice-text');
                         const dn = document.getElementById('dashboard-notice'), dnt = document.getElementById('dashboard-notice-text');
 
@@ -818,13 +819,12 @@
                     if (popup === Swal.getPopup()) Swal.showLoading();
                 }});
                 try {
-                    const sRef = collection(this.db, `${this.paths.teachersCollection}/${tid}/slots`);
-                    const snap = await getDocs(sRef);
-                    this.modalSlots = snap.docs.map(d => {
-                        const data = d.data(); let start = '', end = '';
-                        if(data.time && data.time.includes('~')) [start, end] = data.time.split('~');
-                        else if(data.time) start = data.time; 
-                        return { id: d.id, date: data.date || '', start: start.trim(), end: end.trim(), status: data.status };
+                    const result = await backend({action:'readSchedule',teacherId:tid});
+                    this.modalVersion = result.version;
+                    this.modalEventId = result.eventId;
+                    this.modalSlots = result.slots.filter(d=>d.eventId === result.eventId).map(d=>{
+                        const [start='',end=''] = (d.time||'').split('~');
+                        return {id:d._id,date:d.date||'',start:start.trim(),end:end.trim(),status:d.status};
                     });
                     
                     this.modalSlots.sort((a,b) => (a.date||'').localeCompare(b.date||'') || (a.start||'').localeCompare(b.start||''));
@@ -895,31 +895,14 @@
 
 
             async saveManagedSlots() {
-                Swal.fire({title:'Saving...', customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
+                Swal.fire({title:'Saving...',didOpen:()=>Swal.showLoading()});
                 try {
-                    const sRef = collection(this.db, `${this.paths.teachersCollection}/${this.modalTeacherId}/slots`);
-                    const existSnap = await getDocs(sRef);
-                    const batch = writeBatch(this.db);
-                    const modalSlotIds = this.modalSlots.map(s => s.id).filter(id => id !== null);
-                    
-                    // ✅ 不刪除 booked 和 locked 狀態的 slot
-                    existSnap.docs.forEach(d => { const st = d.data().status; if (!modalSlotIds.includes(d.id) && st !== 'booked' && st !== 'locked') batch.delete(d.ref); });
-                    
-                    this.modalSlots.forEach(s => {
-                        // ✅ 跳過 booked 和 locked 狀態的 slot，避免覆蓋正在進行的預約
-                        if (s.status === 'booked' || s.status === 'locked') return;
-                        const timeStr = `${s.start}~${s.end}`;
-                        if (s.id) batch.update(doc(this.db, `${this.paths.teachersCollection}/${this.modalTeacherId}/slots/${s.id}`), { date: s.date, time: timeStr });
-                        else batch.set(doc(sRef), { date: s.date, time: timeStr, status: 'available' });
-                    });
-                    
-                    await batch.commit();
-                    this.slotCountCache = null; // slot 有異動，清除快取
-                    this.writeLog('Slots Updated', `Admin updated slots for teacher ID: ${this.modalTeacherId}`);
-                    Swal.fire({title:'Saved!', text:'Time slots updated successfully.', icon:'success', timer: 1500, showConfirmButton: false, customClass:{popup:'swal-saas'}});
-                } catch(e) { Swal.fire({title:'Error', text:e.message, icon:'error', customClass:{popup:'swal-saas'}}); }
+                    await backend({action:'saveSchedule',teacherId:this.modalTeacherId,eventId:this.modalEventId,version:this.modalVersion,
+                        slots:this.modalSlots.map(s=>({id:s.id,date:s.date,time:`${s.start}~${s.end}`}))});
+                    this.slotCountCache=null;
+                    Swal.fire({title:'Saved',text:'Schedule validated and saved.',icon:'success'});
+                } catch(e) { Swal.fire({title:'Schedule not saved',text:e.message,icon:'error'}); }
             },
-
 
             updateTeacherSelection() {
                 const checkboxes = document.querySelectorAll('.teacher-checkbox');
@@ -940,68 +923,8 @@
 
 
             async bulkDeleteTeachers() {
-                const selected = Array.from(document.querySelectorAll('.teacher-checkbox:checked')).map(c => c.value);
-                if (selected.length === 0) return;
-
-
-                const res = await Swal.fire({
-                    title: 'Are you sure?', text: `This will delete ${selected.length} teachers AND all their time slots!`, icon: 'warning',
-                    showCancelButton: true, confirmButtonColor: '#FF4B4B', confirmButtonText: 'Yes, delete all!', customClass: { popup: 'swal-saas' }
-                });
-
-
-                if (res.isConfirmed) {
-                    Swal.fire({title:'Deleting...', customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
-                    try {
-                        const chunks = []; let currentBatch = writeBatch(this.db); let currentOpCount = 0;
-
-
-                        // ✨ 優化 4：將獲取 Slots 的行為併發 (Promise.all)
-                        const fetchPromises = selected.map(async id => {
-                            const teacherData = this.data.teachers.find(t => t.id === id);
-                            if (teacherData && teacherData.image && teacherData.image.includes('firebasestorage')) {
-                                try { await deleteObject(storageRef(this.storage, `teachers/${id}_avatar.jpg`)); } catch(imgErr){}
-                            }
-                            return getDocs(collection(this.db, `${this.paths.teachersCollection}/${id}/slots`)).then(snap => ({id, snap}));
-                        });
-
-
-                        const slotsResults = await Promise.all(fetchPromises);
-
-                        // ✅ 收集所有受影響的 bookings，一併刪除並通知家長
-                        let cancelledBookingsCount = 0;
-                        for (const result of slotsResults) {
-                            result.snap.forEach(d => {
-                                currentBatch.delete(d.ref); currentOpCount++;
-                                if (currentOpCount >= 490) { chunks.push(currentBatch.commit()); currentBatch = writeBatch(this.db); currentOpCount = 0; }
-                            });
-
-                            // ✅ 清理該老師的所有 bookings
-                            const orphans = this.data.bookings.filter(b => b.teacherId === result.id);
-                            for (const ob of orphans) {
-                                currentBatch.delete(doc(this.db, this.paths.bookings, ob.id)); currentOpCount++;
-                                if (currentOpCount >= 490) { chunks.push(currentBatch.commit()); currentBatch = writeBatch(this.db); currentOpCount = 0; }
-                                if (ob.email) callGAS({action:"sendCancellation",email:ob.email,parent:ob.parent,student:ob.student,teacherName:ob.teacherName,slotTime:ob.slotTime,slotDate:ob.slotDate||''});
-                                cancelledBookingsCount++;
-                            }
-
-                            currentBatch.delete(doc(this.db, this.paths.teachersCollection, result.id)); currentOpCount++;
-                            if (currentOpCount >= 490) { chunks.push(currentBatch.commit()); currentBatch = writeBatch(this.db); currentOpCount = 0; }
-                        }
-
-
-                        if (currentOpCount > 0) chunks.push(currentBatch.commit());
-                        await Promise.all(chunks);
-
-
-                        this.writeLog('Bulk Delete', `Deleted ${selected.length} teachers${cancelledBookingsCount > 0 ? ` and ${cancelledBookingsCount} bookings` : ''}.`);
-                        if (cancelledBookingsCount > 0) this.loadBookings(); // ✅ 刷新預約列表
-                        Swal.fire({title:'Gone!', text:`${selected.length} teachers deleted.${cancelledBookingsCount > 0 ? ` ${cancelledBookingsCount} bookings cancelled and parents notified.` : ''}`, icon:'success', customClass:{popup:'swal-saas'}});
-                        this.updateTeacherSelection();
-                    } catch(e) { Swal.fire({title:'Error', text:e.message, icon:'error', customClass:{popup:'swal-saas'}}); }
-                }
+                return Swal.fire({title:'Delete individually',text:'Bulk deletion is disabled to protect booking and quota records. Pause bookings, cancel any reservations, then delete each teacher.',icon:'info'});
             },
-
 
             downloadTeacherTemplate() {
                 const ws = XLSX.utils.json_to_sheet([
@@ -1181,43 +1104,26 @@
 
 
             async deleteTeacher(id) {
-                // ✅ 先檢查是否有未完成的預約
-                const hasBookings = this.data.bookings.some(b => b.teacherId === id);
-                const warningText = hasBookings
-                    ? 'This teacher has ACTIVE BOOKINGS! Deleting will also remove all associated bookings and notify parents.'
-                    : 'This wipes the teacher AND all their slots!';
-
-                const res = await Swal.fire({title:'Are you sure?',text:warningText,icon:'warning',showCancelButton:true,confirmButtonColor:'#FF4B4B',confirmButtonText: hasBookings ? 'Yes, delete everything!' : 'Yes, delete!',customClass:{popup:'swal-saas'}});
-                if (res.isConfirmed) {
-                    Swal.fire({title:'Deleting...', customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
-                    try {
-                        const teacherData = this.data.teachers.find(t => t.id === id);
-                        if (teacherData && teacherData.image && teacherData.image.includes('firebasestorage')) {
-                            try { await deleteObject(storageRef(this.storage, `teachers/${id}_avatar.jpg`)); } catch(imgErr){}
-                        }
-                        const slotsRef=collection(this.db,`${this.paths.teachersCollection}/${id}/slots`);
-                        const slotsSnap=await getDocs(slotsRef); const batch=writeBatch(this.db);
-                        slotsSnap.forEach(d=>batch.delete(d.ref)); batch.delete(doc(this.db,this.paths.teachersCollection,id));
-
-                        // ✅ 清理孤兒預約紀錄：刪除該老師的所有 bookings
-                        const orphanBookings = this.data.bookings.filter(b => b.teacherId === id);
-                        for (const ob of orphanBookings) {
-                            batch.delete(doc(this.db, this.paths.bookings, ob.id));
-                            // 發送取消通知給家長
-                            if (ob.email) callGAS({action:"sendCancellation",email:ob.email,parent:ob.parent,student:ob.student,teacherName:ob.teacherName||teacherData?.name||'Teacher',slotTime:ob.slotTime,slotDate:ob.slotDate||''});
-                        }
-
-                        await batch.commit();
-
-                        this.writeLog('Teacher Deleted', `Deleted teacher ID: ${id}${orphanBookings.length > 0 ? ` (${orphanBookings.length} bookings also removed)` : ''}`);
-                        if (this.userRole === 'admin') this.loadBookings(); // 刷新預約列表
-                        Swal.fire({title:'Gone!',text:`Teacher deleted.${orphanBookings.length > 0 ? ` ${orphanBookings.length} bookings cancelled and parents notified.` : ''}`,icon:'success',customClass:{popup:'swal-saas'}});
-                    }catch(e){ Swal.fire({title:'Error',text:e.message,icon:'error',customClass:{popup:'swal-saas'}}); }
-                }
+                const result=await Swal.fire({title:'Delete this teacher?',text:'Bookings must be paused and this teacher must have no reservations.',showCancelButton:true,icon:'warning'});
+                if(!result.isConfirmed)return;
+                try { await backend({action:'deleteTeacher',teacherId:id});this.slotCountCache=null;Swal.fire({title:'Teacher deleted',icon:'success'}); }
+                catch(e){Swal.fire({title:'Not deleted',text:e.message,icon:'error'});}
             },
 
+            watchNotifications() {
+                if(this.unsubscribeNotifications)this.unsubscribeNotifications();
+                this.unsubscribeNotifications=onSnapshot(query(collection(this.db,'artifacts/ibsh-pta-v2/notification_outbox'),orderBy('createdAt','desc'),limit(100)),snap=>{
+                    let panel=document.getElementById('notification-status-panel');
+                    if(!panel){panel=document.createElement('section');panel.id='notification-status-panel';panel.className='card-duo p-5';document.getElementById('view-bookings').append(panel);}
+                    const rows=snap.docs.map(d=>({id:d.id,...d.data()}));
+                    panel.innerHTML='<h3 class="text-lg font-bold mb-3">Notification delivery · latest 100</h3><p class="text-sm mb-4">Booking status is separate from email delivery. Unknown results require manual review; do not resend.</p>'+rows.map(n=>`<div class="py-3 border-t text-sm break-words"><strong>${escapeHtml(n.kind)}</strong> · ${escapeHtml(n.recipient)}<br>Status: ${escapeHtml(n.status)} · Attempts: ${n.attempts||0}<br><small>Reference: ${escapeHtml(n.id)}</small>${n.status==='deferred'?` <button class="underline" data-retry="${escapeHtml(n.id)}">Retry</button>`:''}</div>`).join('');
+                    panel.querySelectorAll('[data-retry]').forEach(btn=>btn.onclick=async()=>{
+                        btn.disabled=true;try{await backend({action:'retryNotification',notificationId:btn.dataset.retry});}
+                        catch(e){Swal.fire({title:'Not retried',text:e.message,icon:'warning'});}finally{btn.disabled=false;}
+                    });
+                },()=>{ console.warn('Notification status unavailable'); });
+            },
 
-            // ✨ 優化 2：針對 Admin 改用 getDocs() 手動拉取，避免全場監聽重拉
             async loadBookings() {
                 try {
                     let q = query(collection(this.db, this.paths.bookings));
@@ -1433,33 +1339,14 @@
 
 
             async cancelBooking(bid, tid, sid) {
-                const res = await Swal.fire({title:'Cancel this?',text:'The slot will be open for others to book.',icon:'warning',showCancelButton:true,confirmButtonColor:'#FF4B4B',confirmButtonText:'Yes, cancel it',customClass:{popup:'swal-saas'}});
-                if (res.isConfirmed) {
-                    try {
-                        const b = this.data.bookings.find(x=>x.id===bid);
-                        const batch = writeBatch(this.db);
-                        batch.delete(doc(this.db,this.paths.bookings,bid));
-                        // ✅ 清除 lockedBy/lockedAt，與前台新 Rules 同步
-                        batch.update(doc(this.db,`${this.paths.teachersCollection}/${tid}/slots/${sid}`),{status:'available',bookingRef:null,lockedAt:null,lockedBy:null});
-                        await batch.commit();
-                        
-                        this.writeLog('Admin Cancelled Booking', `Cancelled booking for ${b.student} with ${b.teacherName}`);
-                        
-                        if (b) {
-                            callGAS({action:"sendCancellation",email:b.email,parent:b.parent,student:b.student,teacherName:b.teacherName,slotTime:b.slotTime,slotDate:b.slotDate||''});
-                            if (b.teacherEmail) {
-                                callGAS({action:"sendTeacherCancellation",teacherEmail:b.teacherEmail,teacherName:b.teacherName,parent:b.parent,parentEmail:b.email,student:b.student,grade:b.grade||'',slotTime:b.slotTime,slotDate:b.slotDate||''});
-                            }
-                        }
-                        
-                        // ✨ Admin 因為取消了預約，需要手動刷新一次畫面
-                        if (this.userRole === 'admin') this.loadBookings();
-                        
-                        Swal.fire({title:'Done!',text:'Slot is free again.',icon:'success',customClass:{popup:'swal-saas'}});
-                    } catch(e) { Swal.fire({title:'Error',text:'Failed to cancel.',icon:'error',customClass:{popup:'swal-saas'}}); }
-                }
+                const res=await Swal.fire({title:'Cancel this booking?',text:'The slot and quota will be released together.',showCancelButton:true,icon:'warning'});
+                if(!res.isConfirmed)return;
+                try {
+                    await backend({action:'cancel',bookingId:bid});
+                    await this.loadBookings();
+                    Swal.fire({title:'Booking cancelled',text:'Cancellation notifications are queued. Check notification status below.',icon:'success'});
+                } catch(e){Swal.fire({title:'Cancellation not confirmed',text:e.message,icon:'error'});}
             },
-
 
             // ✅ 新增：科目管理方法
             renderSubjectManager() {
@@ -1520,102 +1407,23 @@
 
 
             async clearAllTeacherBookSlotRecords() {
-                const res = await Swal.fire({
-                    title: 'Clear all slots and bookings?',
-                    html: `<div class="text-left text-sm font-bold text-gray-600 leading-relaxed">
-                            <p>This will delete every parent booking record and every teacher slot.</p>
-                            <p class="mt-3 text-duo-red">No cancellation emails will be sent. Type <b>CLEAR</b> to continue.</p>
-                           </div>`,
-                    input: 'text',
-                    inputPlaceholder: 'CLEAR',
-                    icon: 'warning',
-                    showCancelButton: true,
-                    confirmButtonColor: '#FF4B4B',
-                    confirmButtonText: 'Clear Everything',
-                    customClass: { popup: 'swal-saas' },
-                    preConfirm: (value) => {
-                        if ((value || '').trim() !== 'CLEAR') {
-                            Swal.showValidationMessage('Type CLEAR to confirm.');
-                            return false;
-                        }
-                        return true;
-                    }
-                });
-                if (!res.isConfirmed) return;
-
-                Swal.fire({title:'Clearing...', text:'Please keep this tab open.', allowOutsideClick:false, customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
-
-                try {
-                    const bookingsSnap = await getDocs(collection(this.db, this.paths.bookings));
-                    const teachersSnap = await getDocs(collection(this.db, this.paths.teachersCollection));
-                    const slotSnaps = await Promise.all(teachersSnap.docs.map(t => getDocs(collection(this.db, `${this.paths.teachersCollection}/${t.id}/slots`))));
-
-                    const batchCommits = [];
-                    let currentBatch = writeBatch(this.db);
-                    let currentOpCount = 0;
-                    let deletedBookings = 0;
-                    let deletedSlots = 0;
-
-                    const flushBatch = () => {
-                        if (currentOpCount === 0) return;
-                        batchCommits.push(currentBatch.commit());
-                        currentBatch = writeBatch(this.db);
-                        currentOpCount = 0;
-                    };
-
-                    const queueBatchOp = (operation) => {
-                        operation(currentBatch);
-                        currentOpCount++;
-                        if (currentOpCount >= 490) flushBatch();
-                    };
-
-                    bookingsSnap.forEach(d => {
-                        queueBatchOp(batch => batch.delete(d.ref));
-                        deletedBookings++;
-                    });
-
-                    slotSnaps.forEach(snap => {
-                        snap.forEach(d => {
-                            queueBatchOp(batch => batch.delete(d.ref));
-                            deletedSlots++;
-                        });
-                    });
-
-                    if (deletedBookings === 0 && deletedSlots === 0) {
-                        Swal.fire({title:'Already Clear', text:'There are no booking records or teacher slots to clear.', icon:'info', customClass:{popup:'swal-saas'}});
-                        return;
-                    }
-
-                    flushBatch();
-                    await Promise.all(batchCommits);
-
-                    this.data.bookings = [];
-                    this.slotCountCache = null;
-                    await this.writeLog('Booking Reset', `Deleted ${deletedBookings} booking records and ${deletedSlots} teacher slots.`);
-                    if (this.userRole === 'admin') await this.loadBookings();
-
-                    Swal.fire({title:'Cleared!', text:`Deleted ${deletedBookings} booking records and ${deletedSlots} teacher slots.`, icon:'success', customClass:{popup:'swal-saas'}});
-                } catch(e) {
-                    Swal.fire({title:'Error', text:e.message || 'Failed to clear slots and booking records.', icon:'error', customClass:{popup:'swal-saas'}});
-                }
+                Swal.fire({title:'History is protected',text:'To start another activity: pause and save, change the Activity ID, then create its schedule. Existing records are retained.',icon:'info'});
             },
-
 
             async saveSettings() {
-                const start = document.getElementById('setting-start').value; const end = document.getElementById('setting-end').value;
-                const announcement = document.getElementById('setting-announcement').value; const backendNotice = document.getElementById('setting-backend-notice').value;
-                const gasUrl = document.getElementById('setting-gas-url').value.trim();
-
-
-                if (!start||!end) return Swal.fire({title:'Oops',text:'Don\'t forget the times!',icon:'error',customClass:{popup:'swal-saas'}});
+                const gasUrl=document.getElementById('setting-gas-url').value.trim();
+                // Contact the entered endpoint only after validating its origin.
+                if(!/^https:\/\/script.google.com\/macros\/s\/[^/]+\/exec$/.test(gasUrl))return Swal.fire({title:'Invalid GAS URL',icon:'error'});
+                this.gasUrl=gasUrl;
                 try {
-                    // ✅ 同時儲存自訂科目清單到 Firestore
-                    await setDoc(doc(this.db, this.paths.config), { start, end, announcement, backendNotice, gasUrl, customSubjects: this.subjects });
-                    this.gasUrl = gasUrl; this.writeLog('Settings Updated', 'Admin updated system settings.');
-                    Swal.fire({title:'Saved!',text:'Everything looks good.',icon:'success',customClass:{popup:'swal-saas'}});
-                } catch(e) { Swal.fire({title:'Error',text:'Failed to save.',icon:'error',customClass:{popup:'swal-saas'}}); }
+                    await backend({action:'saveSettings',eventId:document.getElementById('setting-event').value.trim(),
+                        enabled:document.getElementById('setting-enabled').checked,
+                        start:document.getElementById('setting-start').value,end:document.getElementById('setting-end').value,
+                        announcement:document.getElementById('setting-announcement').value,
+                        backendNotice:document.getElementById('setting-backend-notice').value,gasUrl,customSubjects:this.subjects});
+                    Swal.fire({title:'Settings saved',text:'The backend controls the booking window.',icon:'success'});
+                } catch(e){Swal.fire({title:'Settings not saved',text:e.message,icon:'error'});}
             },
-
 
             async testGAS() {
                 const url = document.getElementById('setting-gas-url').value.trim();
@@ -1623,7 +1431,7 @@
                 Swal.fire({ title:'Testing...', customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading() });
                 try {
                     const res = await fetch(url); const json = await res.json();
-                    if (json.ok) Swal.fire({title:'It Works! 🎉', text:'Successfully connected to Google Apps Script.', icon:'success',customClass:{popup:'swal-saas'}});
+                    if (json.ok && json.apiVersion === 3) Swal.fire({title:'It Works! 🎉', text:'Successfully connected to Google Apps Script.', icon:'success',customClass:{popup:'swal-saas'}});
                     else Swal.fire({title:'Hmm...', text:json.message||'Got a weird response.', icon:'warning',customClass:{popup:'swal-saas'}});
                 } catch(e) { Swal.fire({title:'Broken Link 🔗', text:'Cannot reach it. Check URL or redeploy.', icon:'error',customClass:{popup:'swal-saas'}}); }
             },
@@ -1663,41 +1471,29 @@
             updateBatchCount(){document.getElementById('batch-selected-count').innerText=document.querySelectorAll('.batch-checkbox:checked').length;},
             
             async runBatch() {
-                const sel=Array.from(document.querySelectorAll('.batch-checkbox:checked')).map(c=>c.value);
-                if(sel.length===0) return Swal.fire({title:'Hold on!',text:'Pick at least one teacher.',icon:'warning',customClass:{popup:'swal-saas'}});
-                const date=document.getElementById('batch-date').value; const start=document.getElementById('batch-start').value;
-                const count=parseInt(document.getElementById('batch-count').value); const dur=parseInt(document.getElementById('batch-dur').value); const brk=parseInt(document.getElementById('batch-break').value)||0;
-                if(!date||!start||!count||!dur) return Swal.fire({title:'Missing info',text:'Fill all the blanks!',icon:'warning',customClass:{popup:'swal-saas'}});
-                const confirm=await Swal.fire({title:'Are you sure?',text:'Type YES to overwrite schedules.',input:'text',inputPlaceholder:'YES',showCancelButton:true,customClass:{popup:'swal-saas'}});
-                if(confirm.value!=='YES') return;
-                Swal.fire({title:'Doing magic... ✨',customClass:{popup:'swal-saas'},didOpen:()=>Swal.showLoading()});
-                const toTime=m=>`${Math.floor(m/60).toString().padStart(2,'0')}:${(m%60).toString().padStart(2,'0')}`;
-                const toMins=t=>{const[h,m]=t.split(':').map(Number);return h*60+m;};
-                
-                try {
-                    // ✨ 優化 4：將獲取現存 Slots 的行為併發 (Promise.all)
-                    const fetchPromises = sel.map(tid => getDocs(collection(this.db, `${this.paths.teachersCollection}/${tid}/slots`)).then(snap => ({tid, snap})));
-                    const results = await Promise.all(fetchPromises);
-
-
-                    for(const {tid, snap} of results){
-                        const b=writeBatch(this.db); const ref=collection(this.db,`${this.paths.teachersCollection}/${tid}/slots`);
-                        // ✅ 只刪除 available 狀態的 slot，保留 booked/locked
-                        snap.forEach(d=>{ const st = d.data().status; if (st !== 'booked' && st !== 'locked') b.delete(d.ref); });
-                        let cur=toMins(start);
-                        for(let i=0;i<count;i++){
-                            const endMins = cur + dur;
-                            b.set(doc(ref),{date,time:`${toTime(cur)}~${toTime(endMins)}`,status:'available'}); 
-                            cur+=dur+brk;
-                        }
-                        await b.commit();
-                    }
-                    this.writeLog('Batch Scheduler', `Generated slots for ${sel.length} teachers.`);
-                    Swal.fire({title:'Tada! 🎉',text:'Slots generated for everyone.',icon:'success',customClass:{popup:'swal-saas'}}); 
-                    this.toggleAllBatch(false); this.renderTeachers(); 
-                } catch(e){Swal.fire({title:'Error',text:'Batch failed',icon:'error',customClass:{popup:'swal-saas'}});}
+                const selected=Array.from(document.querySelectorAll('.batch-checkbox:checked')).map(c=>c.value);
+                const date=document.getElementById('batch-date').value,start=document.getElementById('batch-start').value;
+                const count=Number(document.getElementById('batch-count').value),dur=Number(document.getElementById('batch-dur').value),brk=Number(document.getElementById('batch-break').value);
+                const [h,m]=start.split(':').map(Number),first=h*60+m;
+                if(!selected.length||!date||!start||!Number.isInteger(count)||count<1||count>100||!Number.isInteger(dur)||dur<1||!Number.isInteger(brk)||brk<0||first+(count-1)*(dur+brk)+dur>=1440)
+                    return Swal.fire({title:'Check schedule',text:'Select teachers, a date, and 1–100 valid same-day time slots.',icon:'warning'});
+                const confirm=await Swal.fire({title:'Replace available slots?',text:'Bookings must be paused. Existing booked slots and historical activity slots are protected. Each teacher is saved separately.',showCancelButton:true,icon:'warning'});
+                if(!confirm.isConfirmed)return;
+                const time=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
+                const slots=Array.from({length:count},(_,i)=>({date,time:time(first+i*(dur+brk))+'~'+time(first+i*(dur+brk)+dur)}));
+                const saved=[],failed=[];
+                Swal.fire({title:'Saving schedules...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
+                for(const teacherId of selected){
+                    try {
+                        const current=await backend({action:'readSchedule',teacherId});
+                        await backend({action:'saveSchedule',teacherId,eventId:current.eventId,version:current.version,slots});
+                        saved.push(teacherId);
+                    }catch(e){failed.push((this.data.teachers.find(t=>t.id===teacherId)?.name||teacherId)+': '+e.message);}
+                }
+                this.slotCountCache=null;
+                Swal.fire({title:failed.length?'Some schedules were not confirmed':'Schedules saved',text:`${saved.length} saved. ${failed.join('; ')}`,icon:failed.length?'warning':'success'});
+                this.renderTeachers();
             },
-
 
             exportCSV() {
                 // ✅ 排序後匯出，按日期+時間+老師排列
@@ -1712,7 +1508,7 @@
 
                 // 先把預約整理成「每位老師一份排程」
                 const schedulesMap = {};
-                this.data.bookings.forEach(b => {
+                this.data.bookings.filter(b=>b.eventId===this.currentEventId).forEach(b => {
                     const tEmail = b.teacherEmail; if (!tEmail) return;
                     if (!schedulesMap[tEmail]) schedulesMap[tEmail] = {teacherEmail: tEmail, teacherName: b.teacherName, bookings: []};
                     schedulesMap[tEmail].bookings.push({slotTime: b.slotTime, slotDate: b.slotDate || '', student: b.student, grade: b.grade || '', parent: b.parent, email: b.email, message: b.message || '', location: b.location || ''});
@@ -1784,11 +1580,13 @@
 
                 Swal.fire({title:'Sending Emails...', text: 'Please do not close this window.', customClass:{popup:'swal-saas'}, didOpen:()=>Swal.showLoading()});
                 try {
-                    console.log('📧 Sending to GAS:', JSON.stringify({action: "sendTeacherSchedules", teacherCount: selectedSchedules.length}));
-                    const result = await callGAS({action: "sendTeacherSchedules", schedules: selectedSchedules});
-                    console.log('📧 GAS Response:', JSON.stringify(result));
-                    if (result.ok) { this.writeLog('Email Sent', `Sent schedule emails to ${selectedSchedules.length} teachers (selected from ${schedules.length}).`); Swal.fire({title: 'Sent! 🚀', text: result.message, icon: 'success', customClass:{popup:'swal-saas'}}); }
-                    else Swal.fire({title: 'Error', text: result.error || 'Failed to send emails.', icon: 'error', customClass:{popup:'swal-saas'}});
+                    const queued=[],failed=[];
+                    for(const selected of selectedSchedules){
+                        const teacherIds=[...new Set(this.data.bookings.filter(b=>b.teacherEmail===selected.teacherEmail && b.eventId===this.currentEventId).map(b=>b.teacherId))];
+                        for(const teacherId of teacherIds)try{await backend({action:'sendTeacherSchedules',teacherId});queued.push(teacherId);}catch(e){failed.push(e.message);}
+                    }
+                    Swal.fire({title:failed.length?'Queue partially updated':'Notifications tracked',
+                        text:`${queued.length} teacher schedules queued or already tracked. ${failed.join('; ')} Check notification status; queuing does not mean delivered.`,icon:failed.length?'warning':'success'});
                 } catch (e) { console.error('📧 GAS Error:', e); Swal.fire({title: 'Error', text: e.message, icon: 'error', customClass:{popup:'swal-saas'}}); }
             }
         };
