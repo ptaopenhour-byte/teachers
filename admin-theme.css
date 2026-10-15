@@ -163,3 +163,29 @@ input.peer:focus-visible + div { outline: 3px solid #a8c0ff; outline-offset: 3px
     #slots-modal-container input[type="time"] { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+.parent-account-search { margin-top:24px; }
+.parent-account-search label { display:block;font-size:13px;margin-bottom:8px;color:#526079; }
+.parent-account-search > div { display:flex;gap:10px;flex-wrap:wrap; }
+.parent-account-search input { flex:1;min-width:200px;padding:12px; }
+.parent-account-search button { padding:12px 18px; }
+.parent-account-row { display:flex;justify-content:space-between;align-items:center;gap:24px;padding:24px;background:#fff; }
+.parent-account-row > div { min-width:0;overflow-wrap:anywhere; }
+.parent-account-row h3 { font-size:16px;font-weight:600;margin-bottom:6px; }
+.parent-account-row p,.parent-account-row small { color:#64748b;font-size:13px;line-height:1.7; }
+.parent-account-delete { flex-shrink:0;border:1px solid #fecaca;border-radius:8px;background:#fff5f5;color:#b42335;padding:12px 16px;min-height:44px; }
+.account-deletion-summary { display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:16px;background:#fff5f5;border:1px solid #fecaca;border-radius:10px;margin:16px 0; }
+.swal2-popup.account-danger .swal2-confirm { background:#b42335!important;color:#fff!important; }
+.account-danger .swal2-input { width:calc(100% - 40px);margin:12px 20px 0;max-width:100%;box-sizing:border-box;font-size:16px; }
+.account-danger details { margin-bottom:12px;color:#646c7a; }
+.account-danger summary { cursor:pointer;text-decoration:underline;text-underline-offset:3px; }
+@media(max-width:600px) {
+  .account-danger .swal2-icon { width:48px;height:48px;margin:20px auto 0; }
+  .account-danger .swal2-icon-content { font-size:36px; }
+  .account-danger .swal2-title { font-size:23px;padding-top:18px; }
+  .account-danger .swal2-html-container { margin:16px 20px 0;padding:0; }
+  .account-danger .swal2-input-label { margin:16px 20px 0;font-size:14px; }
+  .account-danger .swal2-actions { margin:16px 20px 0;gap:8px; }
+  .swal2-popup.account-danger .swal2-actions button { width:100%;min-height:44px;margin:0;padding:12px!important; }
+}
+@media(max-width:767px) { .parent-account-row { align-items:stretch;flex-direction:column;gap:14px;padding:20px; }.parent-account-search input { width:100%;flex-basis:100%;min-width:0; }.parent-account-search button { flex:1; } }
+.parent-account-delete:disabled { opacity: .45; cursor: not-allowed; }

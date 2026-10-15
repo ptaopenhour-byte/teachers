@@ -110,6 +110,9 @@
                     <button onclick="admin.showView('teachers')" id="nav-teachers" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600">
                         <span class="nav-icon"><i class="fas fa-users" aria-hidden="true"></i></span> Teacher List
                     </button>
+                    <button onclick="admin.showView('parents')" id="nav-parents" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600">
+                        <span class="nav-icon"><i class="far fa-address-book" aria-hidden="true"></i></span> Parent Accounts
+                    </button>
                     <button onclick="admin.showView('batch')" id="nav-batch" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600">
                         <span class="nav-icon"><i class="far fa-clock" aria-hidden="true"></i></span> Scheduling
                     </button>
@@ -248,6 +251,23 @@
                 <div id="teachers-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-20"></div>
             </div>
 
+
+            <!-- View: Parent accounts (super administrators only) -->
+            <div id="view-parents" class="hidden space-y-6">
+                <section class="card-duo p-6 md:p-8 bg-white">
+                    <h2 class="text-3xl font-bold mb-2">Parent Accounts</h2>
+                    <p class="text-sm text-gray-500">One account per verified email. Deletion removes the entire family's records across all activities and releases booked slots.</p>
+                    <form id="parent-account-search" class="parent-account-search" onsubmit="event.preventDefault();admin.findParentAccount()">
+                        <label for="parent-account-email">Find an exact email address</label>
+                        <div><input id="parent-account-email" type="email" class="input-duo" placeholder="parent@example.com" autocomplete="off"><button class="btn-duo bg-duo-blue text-white" type="submit">Find account</button><button class="btn-duo" type="button" onclick="admin.loadParentAccounts(true)">Show all</button></div>
+                    </form>
+                </section>
+                <p id="parent-accounts-status" class="text-sm text-gray-500" role="status"></p>
+                <p id="parent-deletion-window" class="text-sm text-gray-500" role="status">Account deletion requires Pause and the registration deadline to have passed.</p>
+                <section id="parent-accounts-list" class="space-y-3" aria-label="Parent account list"></section>
+                <button id="parent-accounts-more" class="btn-duo hidden" onclick="admin.loadParentAccounts(false)">Load next 50</button>
+                <section id="parent-deletions-pending" class="card-duo p-5 hidden" aria-label="Account deletion progress"></section>
+            </div>
 
             <!-- View: Batch -->
             <div id="view-batch" class="hidden space-y-6">
@@ -412,7 +432,8 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
-        import { getFirestore, doc, collection, addDoc, setDoc, deleteDoc, getDoc, getDocs, onSnapshot, query, where, updateDoc, writeBatch, orderBy, limit } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+        import { getFirestore, doc, collection, addDoc, setDoc, deleteDoc, getDoc, getDocs, onSnapshot, query, where, updateDoc, writeBatch, orderBy, limit, documentId, startAfter } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+        import { confirmAccountDeletion } from "./account-deletion.mjs";
         import { getAuth, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
         import { getStorage, ref as storageRef, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
 
@@ -522,6 +543,9 @@
                         // ✅ Logs 不再自動載入，改為點進 Logs 頁面才載入（省 500 reads/次）
                         this.startIdleDetection();
                     } else {
+                        this.userRole='logged-out';this.parentAccounts=[];this.accountDeletionAllowed=false;
+                        document.getElementById('parent-accounts-list').replaceChildren();
+                        document.getElementById('parent-deletions-pending').replaceChildren();
                         // ✅ 登出時取消所有監聽，停止 Firebase 讀取
                         if (this.unsubscribeNotifications) { this.unsubscribeNotifications(); this.unsubscribeNotifications = null; }
                         if (this.unsubscribeConfig) { this.unsubscribeConfig(); this.unsubscribeConfig = null; }
@@ -738,18 +762,93 @@
 
             showView(viewId) {
                 if (this.userRole==='teacher' && viewId!=='bookings') return;
-                ['bookings','teachers','batch','settings','logs'].forEach(v => { const el=document.getElementById(`view-${v}`); if(el) el.classList.add('hidden'); });
+                ['bookings','teachers','parents','batch','settings','logs'].forEach(v => { const el=document.getElementById(`view-${v}`); if(el) el.classList.add('hidden'); });
                 document.querySelectorAll('.sidebar-item').forEach(el => { el.classList.remove('active'); el.classList.remove('border-duo-green'); if(!el.id?.startsWith('nav-')) el.classList.add('hover:bg-gray-50'); });
                 document.getElementById(`view-${viewId}`)?.classList.remove('hidden');
                 const nav = document.getElementById(`nav-${viewId}`);
                 if(nav) { nav.classList.add('active'); nav.classList.add('border-duo-green'); }
                 if (viewId==='batch') this.renderBatchSelection();
                 if (viewId==='teachers') this.renderTeachers();
+                if (viewId==='parents') this.loadParentAccounts(true);
                 // ✅ 點進 Logs 頁面才啟動監聽（lazy load）
                 if (viewId==='logs' && !this.unsubscribeLogs) this.initLogsListener();
                 if (window.innerWidth < 768) this.toggleSidebar(false);
             },
 
+
+            async loadParentAccounts(reset=true) {
+                if(this.userRole!=='admin'||this.parentsLoading)return;
+                this.parentsLoading=true;
+                const status=document.getElementById('parent-accounts-status'),more=document.getElementById('parent-accounts-more');
+                status.textContent='Loading parent accounts…';more.disabled=true;
+                try {
+                    await this.refreshAccountDeletionWindow();
+                    if(reset){this.parentAccounts=[];this.parentCursor=null;document.getElementById('parent-account-email').value='';}
+                    const constraints=[orderBy(documentId()),limit(50)];if(this.parentCursor)constraints.push(startAfter(this.parentCursor));
+                    const snap=await getDocs(query(collection(this.db,'artifacts/ibsh-pta-v2/private_profiles'),...constraints));
+                    this.parentAccounts.push(...snap.docs.map(d=>({...d.data(),email:d.id})));
+                    this.parentCursor=snap.docs.at(-1)||this.parentCursor;more.classList.toggle('hidden',snap.size<50);
+                    this.renderParentAccounts();
+                    await this.loadPendingAccountDeletions();
+                } catch(error){status.textContent='Could not load accounts: '+error.message;}
+                finally{this.parentsLoading=false;more.disabled=false;}
+            },
+
+            async findParentAccount() {
+                if(this.userRole!=='admin'||this.parentsLoading)return;
+                const email=document.getElementById('parent-account-email').value.trim().toLowerCase();if(!email)return this.loadParentAccounts(true);
+                this.parentsLoading=true;const status=document.getElementById('parent-accounts-status');status.textContent='Finding account…';
+                try {
+                    await this.refreshAccountDeletionWindow();
+                    const snap=await getDoc(doc(this.db,'artifacts/ibsh-pta-v2/private_profiles',email));
+                    this.parentAccounts=snap.exists()?[{...snap.data(),email:snap.id}]:[];
+                    this.parentCursor=null;document.getElementById('parent-accounts-more').classList.add('hidden');this.renderParentAccounts();
+                    await this.loadPendingAccountDeletions();
+                }catch(error){status.textContent='Could not find account: '+error.message;}
+                finally{this.parentsLoading=false;}
+            },
+
+            renderParentAccounts() {
+                const rows=this.parentAccounts||[];
+                document.getElementById('parent-accounts-status').textContent=rows.length?rows.length+' accounts shown.':'No matching parent profiles.';
+                const list=document.getElementById('parent-accounts-list');
+                list.innerHTML=rows.map(p=>`<article class="card-duo parent-account-row"><div><h3>${escapeHtml(p.email)}</h3><p>${escapeHtml((p.parents||[]).map(x=>x.name).join(' · ')||'No guardians added')}</p><small>${(p.children||[]).length} children · ${(p.parents||[]).length} guardians</small></div><button class="parent-account-delete" ${this.accountDeletionAllowed?'':'disabled'} data-delete-parent="${escapeHtml(p.email)}">Delete account</button></article>`).join('');
+                list.querySelectorAll('[data-delete-parent]').forEach(button=>button.addEventListener('click',()=>this.deleteParentAccount(button.dataset.deleteParent)));
+            },
+
+            async loadPendingAccountDeletions() {
+                if(this.userRole!=='admin')return;
+                const panel=document.getElementById('parent-deletions-pending');
+                try {
+                    const snap=await getDocs(query(collection(this.db,'artifacts/ibsh-pta-v2/account_deletions'),limit(50)));
+                    panel.classList.toggle('hidden',snap.empty);
+                    panel.innerHTML='<h3 class="font-bold mb-3">Deletion finishing · up to 50</h3><p class="text-sm mb-3">Family data is removed and access is blocked. The background worker is finishing sign-in cleanup. Refresh this page section to check progress.</p>'+snap.docs.map(d=>{const j=d.data();return `<p class="text-sm break-words mb-3"><strong>${escapeHtml(j.email)}</strong><br>${escapeHtml(j.error||'Waiting for background cleanup.')}</p>`;}).join('');
+                }catch(error){panel.classList.remove('hidden');panel.textContent='Deletion progress unavailable. Check the updated Firestore Rules and GAS worker.';}
+            },
+
+            async deleteParentAccount(email) {
+                if(this.userRole!=='admin')return;
+                await this.refreshAccountDeletionWindow();this.renderParentAccounts();
+                if(!this.accountDeletionAllowed)return;
+                const result=await confirmAccountDeletion({email,request:backend});
+                if(!result?.dataDeleted)return;
+                await Swal.fire({title:result.authCleanupPending?'Deletion finishing':'Parent account deleted',
+                    text:result.authCleanupPending?'Family records and bookings are removed; account access is blocked. Sign-in cleanup will continue in the background.':'Family profiles, bookings and notification records were removed. Booked slots have been released.',icon:'info'});
+                await this.loadParentAccounts(true);await this.loadBookings();
+            },
+
+            async refreshAccountDeletionWindow() {
+                this.accountDeletionAllowed=false;
+                const notice=document.getElementById('parent-deletion-window');
+                notice.textContent='Checking account deletion availability…';
+                document.querySelectorAll('[data-delete-parent]').forEach(button=>{button.disabled=true;});
+                try {
+                    const state=await callGAS({action:'status'});
+                    this.accountDeletionAllowed=state.ok && state.accountDeletionAllowed===true;
+                    notice.textContent=this.accountDeletionAllowed?'Account deletion is available: bookings are Paused and registration has ended.':
+                        (state.accountDeletionReason||'Deletion unavailable. Bookings must be Paused AND the registration deadline must have passed. Retry after checking the backend.');
+                }catch(error){notice.textContent='Unable to verify deletion availability. No account can be deleted; retry later.';}
+            },
 
             async loadTeachers() {
                 onSnapshot(query(collection(this.db, this.paths.teachersCollection)), s => {
