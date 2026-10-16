@@ -22,9 +22,17 @@ export async function confirmAccountDeletion({ email, request, onDeleting = () =
             if (value.trim() !== email) { window.Swal.showValidationMessage('Enter the exact email shown above.'); return false; }
             onDeleting(true);
             try { return await request({ action: 'deleteAccount', email, confirmationEmail: value.trim(), fingerprint: preview.fingerprint }); }
-            catch (error) { window.Swal.showValidationMessage(error.message); return false; }
+            catch (error) {
+                if(error.code==='ACCOUNT_REVIEW_CHANGED')return {reviewChanged:true};
+                window.Swal.showValidationMessage(error.message); return false;
+            }
             finally { onDeleting(false); }
         }
     });
+    if(result.isConfirmed && result.value?.reviewChanged){
+        const again=await window.Swal.fire({title:'Account changed',text:'No data was deleted. Review a fresh summary and type the email again before continuing.',showCancelButton:true,confirmButtonText:'Review updated summary',cancelButtonText:'Keep account',focusCancel:true});
+        if(again.isConfirmed)return confirmAccountDeletion({email,request,onDeleting});
+        return null;
+    }
     return result.isConfirmed ? result.value : null;
 }

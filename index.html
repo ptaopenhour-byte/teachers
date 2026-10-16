@@ -471,7 +471,15 @@
         }
 
 
-        async function callGAS(payload) {
+        const gasInFlight=new Map();
+        function callGAS(payload) {
+            if(['status','previewAccountDeletion'].includes(payload.action)&&admin.currentEventId)payload={...payload,eventId:admin.currentEventId};
+            const key=JSON.stringify([admin.auth?.currentUser?.uid,payload]);
+            if(gasInFlight.has(key))return gasInFlight.get(key);
+            const pending=fetchGAS(payload).finally(()=>gasInFlight.delete(key));
+            gasInFlight.set(key,pending);return pending;
+        }
+        async function fetchGAS(payload) {
             const url = admin.gasUrl || document.getElementById('setting-gas-url')?.value.trim();
             if (!/^https:\/\/script.google.com\/macros\/s\/[^/]+\/exec$/.test(url || '')) return {ok:false,error:'Set a valid GAS Web App /exec URL in Settings.'};
             try {
@@ -489,7 +497,7 @@
             sessionStorage.setItem(key,requestId);
             const result = await callGAS({...payload,requestId});
             if(!result.uncertain)sessionStorage.removeItem(key);
-            if(!result.ok)throw new Error(result.error||'Request failed');
+            if(!result.ok){const error=new Error(result.error||'Request failed');error.code=result.code;throw error;}
             return result;
         }
 
@@ -827,7 +835,9 @@
             },
 
             async deleteParentAccount(email) {
-                if(this.userRole!=='admin')return;
+                if(this.userRole!=='admin'||this.deletingParent)return;
+                this.deletingParent=true;
+                try {
                 await this.refreshAccountDeletionWindow();this.renderParentAccounts();
                 if(!this.accountDeletionAllowed)return;
                 const result=await confirmAccountDeletion({email,request:backend});
@@ -835,6 +845,7 @@
                 await Swal.fire({title:result.authCleanupPending?'Deletion finishing':'Parent account deleted',
                     text:result.authCleanupPending?'Family records and bookings are removed; account access is blocked. Sign-in cleanup will continue in the background.':'Family profiles, bookings and notification records were removed. Booked slots have been released.',icon:'info'});
                 await this.loadParentAccounts(true);await this.loadBookings();
+                }finally{this.deletingParent=false;}
             },
 
             async refreshAccountDeletionWindow() {
