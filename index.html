@@ -434,6 +434,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
         import { getFirestore, doc, collection, addDoc, setDoc, deleteDoc, getDoc, getDocs, onSnapshot, query, where, updateDoc, writeBatch, orderBy, limit, documentId, startAfter } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
         import { confirmAccountDeletion } from "./account-deletion.mjs";
+        import { directFirestoreAPI } from "./firestore-booking.mjs";
         import { getAuth, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
         import { getStorage, ref as storageRef, uploadString, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-storage.js";
 
@@ -471,33 +472,41 @@
         }
 
 
-        const gasInFlight=new Map();
-        function callGAS(payload) {
+        const apiInFlight=new Map();
+        function callBackend(payload) {
             if(['status','previewAccountDeletion'].includes(payload.action)&&admin.currentEventId)payload={...payload,eventId:admin.currentEventId};
             const key=JSON.stringify([admin.auth?.currentUser?.uid,payload]);
-            if(gasInFlight.has(key))return gasInFlight.get(key);
-            const pending=fetchGAS(payload).finally(()=>gasInFlight.delete(key));
-            gasInFlight.set(key,pending);return pending;
+            if(apiInFlight.has(key))return apiInFlight.get(key);
+            const request=['book','cancel','status'].includes(payload.action)
+                ? (admin.directAPI ||= directFirestoreAPI(admin.db,admin.auth)).then(api=>api(payload))
+                : fetchGAS(payload);
+            const pending=request.finally(()=>apiInFlight.delete(key));
+            apiInFlight.set(key,pending);return pending;
         }
         async function fetchGAS(payload) {
             const url = admin.gasUrl || document.getElementById('setting-gas-url')?.value.trim();
             if (!/^https:\/\/script.google.com\/macros\/s\/[^/]+\/exec$/.test(url || '')) return {ok:false,error:'Set a valid GAS Web App /exec URL in Settings.'};
+            const controller=new AbortController();
+            const timeout=setTimeout(()=>controller.abort(),45000);
             try {
                 const idToken = await admin.auth.currentUser.getIdToken();
-                const response = await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({...payload,idToken})});
+                const response = await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({...payload,idToken}),signal:controller.signal});
                 const result = await response.json();
                 if(result.apiVersion !== 3) return {ok:false,error:'Deploy backend V3 before using this page.'};
                 return result;
-            } catch(e) { return {ok:false,uncertain:true,error:'Connection interrupted. Refresh records before retrying. The previous operation may have succeeded.'}; }
+            } catch(e) { return {ok:false,uncertain:true,error:e.name==='AbortError'?
+                'The server did not respond within 45 seconds. Refresh records before retrying; the operation may already have completed.':
+                'Connection interrupted. Refresh records before retrying. The previous operation may have succeeded.'}; }
+            finally { clearTimeout(timeout); }
         }
         async function backend(payload) {
             const digest = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(payload))))).map(n=>n.toString(16).padStart(2,'0')).join('');
             const key = 'pta-operation-'+admin.auth.currentUser.uid+'-'+digest;
             const requestId = sessionStorage.getItem(key)||crypto.randomUUID();
             sessionStorage.setItem(key,requestId);
-            const result = await callGAS({...payload,requestId});
+            const result = await callBackend({...payload,requestId});
             if(!result.uncertain)sessionStorage.removeItem(key);
-            if(!result.ok){const error=new Error(result.error||'Request failed');error.code=result.code;throw error;}
+                if(!result.ok){const error=new Error(result.error||'Request failed');error.code=result.code;error.uncertain=result.uncertain===true;throw error;}
             return result;
         }
 
@@ -854,7 +863,7 @@
                 notice.textContent='Checking account deletion availability…';
                 document.querySelectorAll('[data-delete-parent]').forEach(button=>{button.disabled=true;});
                 try {
-                    const state=await callGAS({action:'status'});
+                    const state=await callBackend({action:'status'});
                     this.accountDeletionAllowed=state.ok && state.accountDeletionAllowed===true;
                     notice.textContent=this.accountDeletionAllowed?'Account deletion is available: bookings are Paused and registration has ended.':
                         (state.accountDeletionReason||'Deletion unavailable. Bookings must be Paused AND the registration deadline must have passed. Retry after checking the backend.');
@@ -1214,10 +1223,35 @@
 
 
             async deleteTeacher(id) {
-                const result=await Swal.fire({title:'Delete this teacher?',text:'Bookings must be paused and this teacher must have no reservations.',showCancelButton:true,icon:'warning'});
-                if(!result.isConfirmed)return;
-                try { await backend({action:'deleteTeacher',teacherId:id});this.slotCountCache=null;Swal.fire({title:'Teacher deleted',icon:'success'}); }
-                catch(e){Swal.fire({title:'Not deleted',text:e.message,icon:'error'});}
+                if(this.userRole!=='admin'||this.deletingTeacherId)return;
+                const teacher=this.data.teachers.find(t=>t.id===id);
+                if(!teacher)return Swal.fire({title:'Teacher unavailable',text:'Refresh the teacher list before continuing.',icon:'info'});
+                this.deletingTeacherId=id;
+                try {
+                    const result=await Swal.fire({title:'Delete this teacher?',
+                        text:`${teacher.name || 'This teacher'} and their available time slots will be removed. Bookings must be paused, with no reservations remaining.`,
+                        showCancelButton:true,confirmButtonText:'Delete teacher',cancelButtonText:'Keep teacher',focusCancel:true,
+                        icon:'warning',customClass:{popup:'swal-saas'},showLoaderOnConfirm:true,
+                        allowOutsideClick:()=>!Swal.isLoading(),allowEscapeKey:()=>!Swal.isLoading(),
+                        preConfirm:async()=>{
+                            Swal.getHtmlContainer().textContent='Deleting teacher… Checking reservations and time slots. Please wait.';
+                            try {
+                                const response=await backend({action:'deleteTeacher',teacherId:id});
+                                if(response.deleted!==true)throw Error('Deletion was not confirmed. Refresh the teacher list before trying again.');
+                                return response;
+                            }catch(error){
+                                if(error.uncertain)return {uncertain:true,message:error.message};
+                                Swal.showValidationMessage(error.message);return false;
+                            }
+                        }});
+                    if(!result.isConfirmed)return;
+                    if(result.value?.uncertain){
+                        await Swal.fire({title:'Deletion not confirmed',text:result.value.message,icon:'warning',customClass:{popup:'swal-saas'}});return;
+                    }
+                    this.slotCountCache=null;
+                    this.data.teachers=this.data.teachers.filter(t=>t.id!==id);this.renderTeachers();
+                    await Swal.fire({title:'Teacher deleted',icon:'success',customClass:{popup:'swal-saas'}});
+                }finally{this.deletingTeacherId=null;}
             },
 
             watchNotifications() {
