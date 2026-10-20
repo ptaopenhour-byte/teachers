@@ -308,12 +308,23 @@
                                             <span class="text-sm font-extrabold text-duo-green-dark uppercase">Selected:</span>
                                             <span id="batch-selected-count" class="text-xl font-black text-duo-green">0</span>
                                         </div>
-                                        <button onclick="admin.runBatch()" class="btn-duo w-full bg-[#1CB0F6] text-white border-[#1899D6] py-4 text-lg">Generate Time Slots</button>
+                                        <button id="generate-slots-btn" onclick="admin.runBatch()" class="btn-duo w-full bg-[#1CB0F6] text-white border-[#1899D6] py-4 text-lg">Generate Time Slots</button>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <section class="mt-8 pt-6 border-t border-gray-200" aria-labelledby="delete-slots-heading">
+                        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div class="min-w-0">
+                                <h3 id="delete-slots-heading" class="text-lg font-bold text-gray-800">Clear activity time slots</h3>
+                                <p class="text-sm text-gray-500 mt-2">All teachers in the current activity, not just the selection above. Pause and save first. Cancel existing bookings before continuing.</p>
+                                <p class="text-sm text-gray-500 mt-1">Teachers, family records and historical activity slots are kept. Deleted slots cannot be restored automatically.</p>
+                            </div>
+                            <button id="delete-all-slots-btn" onclick="admin.deleteAllSlots()" class="btn-duo shrink-0 w-full md:w-auto bg-red-50 text-red-700 border-red-200 px-5 py-3">Delete all time slots…</button>
+                        </div>
+                        <p id="delete-all-slots-status" class="text-sm text-gray-600 mt-3 break-words" role="status" aria-live="polite"></p>
+                    </section>
                 </div>
             </div>
 
@@ -1014,6 +1025,7 @@
 
 
             async saveManagedSlots() {
+                if(this.deletingAllSlots)return;
                 Swal.fire({title:'Saving...',didOpen:()=>Swal.showLoading()});
                 try {
                     await backend({action:'saveSchedule',teacherId:this.modalTeacherId,eventId:this.modalEventId,version:this.modalVersion,
@@ -1223,7 +1235,7 @@
 
 
             async deleteTeacher(id) {
-                if(this.userRole!=='admin'||this.deletingTeacherId)return;
+                if(this.userRole!=='admin'||this.deletingTeacherId||this.deletingAllSlots)return;
                 const teacher=this.data.teachers.find(t=>t.id===id);
                 if(!teacher)return Swal.fire({title:'Teacher unavailable',text:'Refresh the teacher list before continuing.',icon:'info'});
                 this.deletingTeacherId=id;
@@ -1614,7 +1626,74 @@
             toggleAllBatch(sel){document.querySelectorAll('.batch-checkbox').forEach(c=>c.checked=sel); this.updateBatchCount();},
             updateBatchCount(){document.getElementById('batch-selected-count').innerText=document.querySelectorAll('.batch-checkbox:checked').length;},
             
+            async deleteAllSlots() {
+                if(this.userRole!=='admin'||this.deletingAllSlots||this.generatingSlots)return;
+                const status=document.getElementById('delete-all-slots-status');
+                const button=document.getElementById('delete-all-slots-btn'),generate=document.getElementById('generate-slots-btn');
+                const teachers=this.data.teachers.map(t=>({id:t.id,name:t.name||t.id}));
+                if(!teachers.length)return Swal.fire({title:'No teachers',text:'There are no teacher schedules to review.',icon:'info'});
+                this.deletingAllSlots=true;button.disabled=true;generate.disabled=true;
+                let deletedSlots=0,completed=0,activeTeacher=null,attempted=false;
+                const progress=(title,text)=>{
+                    status.textContent=text;
+                    if(Swal.getTitle()?.textContent===title){const body=Swal.getHtmlContainer();if(body)body.textContent=text;return;}
+                    Swal.fire({title,text,allowOutsideClick:false,allowEscapeKey:false,showConfirmButton:false,
+                        customClass:{popup:'swal-saas'},didOpen:popup=>{if(Swal.getPopup()===popup&&Swal.getTitle()?.textContent===title)Swal.showLoading();}});
+                };
+                try {
+                    const config=await getDoc(doc(this.db,this.paths.config));
+                    if(!config.exists()||config.data().enabled!==false||!config.data().eventId)
+                        throw Error('Pause bookings in Settings and save before deleting time slots.');
+                    const eventId=config.data().eventId,plans=new Array(teachers.length);
+                    let next=0,reviewed=0,reviewError=null;
+                    progress('Reviewing time slots…',`Reviewing all ${teachers.length} teachers. No slots have been deleted.`);
+                    // Two bounded read-only requests, never an unbounded fan-out.
+                    const review=async()=>{
+                        while(!reviewError&&next<teachers.length){
+                            const index=next++,teacher=teachers[index];
+                            try {
+                                const plan=await backend({action:'previewSlotDeletion',teacherId:teacher.id,eventId});
+                                if(plan.previewed!==true||plan.teacherId!==teacher.id||plan.eventId!==eventId||!Number.isInteger(plan.count)||plan.count<0||!Number.isInteger(plan.retainedSlots)||plan.retainedSlots<0||!/^[a-f0-9]{64}$/.test(plan.fingerprint||''))
+                                    throw Error('The server did not return a valid deletion preview. Check the backend deployment.');
+                                plans[index]={...plan,name:teacher.name};reviewed++;
+                                progress('Reviewing time slots…',`Reviewed ${reviewed} of ${teachers.length} teachers. No slots have been deleted.`);
+                            }catch(error){reviewError=new Error(teacher.name+': '+error.message);}
+                        }
+                    };
+                    await Promise.all([review(),review()]);if(reviewError)throw reviewError;
+                    const targets=plans.filter(p=>p.count>0),total=targets.reduce((n,p)=>n+p.count,0),retained=plans.reduce((n,p)=>n+p.retainedSlots,0);
+                    if(!total){status.textContent='No current-activity slots to delete.';await Swal.fire({title:'No time slots',text:'This activity has no time slots. Historical slots were kept.',icon:'info'});return;}
+                    const result=await Swal.fire({title:'Delete all activity slots?',icon:'warning',
+                        html:`<p><strong>${total} time slots · ${targets.length} teachers</strong></p><p class="mt-2">Activity: <strong>${escapeHtml(eventId)}</strong></p><p class="mt-2">All teachers are included, regardless of the selection above. ${retained} historical or unassigned slots will be kept.</p><p class="mt-2">Teachers and family records stay. Deletion is permanent. Teachers are processed separately; if interrupted, earlier deletions remain.</p>`,
+                        input:'text',inputLabel:'Type DELETE to confirm',inputPlaceholder:'DELETE',inputAttributes:{autocomplete:'off',autocapitalize:'characters','aria-label':'Type DELETE to confirm'},
+                        inputValidator:value=>value==='DELETE'?undefined:'Type DELETE exactly to continue.',
+                        showCancelButton:true,confirmButtonText:'Delete reviewed slots',cancelButtonText:'Keep slots',focusCancel:true,
+                        customClass:{popup:'swal-saas account-danger'}});
+                    if(!result.isConfirmed){status.textContent='Cancelled. No time slots were deleted.';return;}
+                    for(const plan of targets){
+                        activeTeacher=plan;progress('Deleting time slots…',`${completed} of ${targets.length} teachers confirmed. ${deletedSlots} slots deleted. Checking ${plan.name}…`);
+                        attempted=true;
+                        const response=await backend({action:'deleteSlots',teacherId:plan.teacherId,eventId,fingerprint:plan.fingerprint,confirmation:'DELETE'});
+                        if(response.deleted!==true||response.deletedSlots!==plan.count||response.teacherId!==plan.teacherId||response.eventId!==eventId){
+                            const error=new Error('The deletion result was not confirmed. Refresh schedules before continuing.');error.uncertain=true;throw error;
+                        }
+                        deletedSlots+=response.deletedSlots;completed++;
+                    }
+                    status.textContent=`Deleted ${deletedSlots} reviewed time slots for ${completed} teachers in ${eventId}. Historical slots and all teachers were kept.`;
+                    await Swal.fire({title:'Time slots deleted',text:status.textContent+' Bookings remain paused.',icon:'success',customClass:{popup:'swal-saas'}});
+                }catch(error){
+                    const details=attempted?`${deletedSlots} slots across ${completed} teacher${completed===1?'':'s'} are confirmed deleted. Stopped at ${activeTeacher?.name||'the current teacher'}. ${error.message} ${error.uncertain?'The last request may have completed. Refresh and review again before retrying.':'Remaining teachers were not processed. Review again before retrying.'}`:
+                        error.message+' No time slots were deleted.';
+                    status.textContent=details;
+                    await Swal.fire({title:attempted?'Slot deletion stopped':'Nothing was deleted',text:details,icon:'warning',customClass:{popup:'swal-saas'}});
+                }finally{
+                    this.deletingAllSlots=false;button.disabled=false;generate.disabled=false;
+                    if(attempted){this.slotCountCache=null;this.renderTeacherCards();}
+                }
+            },
+
             async runBatch() {
+                if(this.deletingAllSlots||this.generatingSlots)return;
                 const selected=Array.from(document.querySelectorAll('.batch-checkbox:checked')).map(c=>c.value);
                 const date=document.getElementById('batch-date').value,start=document.getElementById('batch-start').value;
                 const count=Number(document.getElementById('batch-count').value),dur=Number(document.getElementById('batch-dur').value),brk=Number(document.getElementById('batch-break').value);
@@ -1626,6 +1705,8 @@
                 const time=n=>String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');
                 const slots=Array.from({length:count},(_,i)=>({date,time:time(first+i*(dur+brk))+'~'+time(first+i*(dur+brk)+dur)}));
                 const saved=[],failed=[];
+                this.generatingSlots=true;document.getElementById('delete-all-slots-btn').disabled=true;
+                try {
                 Swal.fire({title:'Saving schedules...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
                 for(const teacherId of selected){
                     try {
@@ -1637,6 +1718,7 @@
                 this.slotCountCache=null;
                 Swal.fire({title:failed.length?'Some schedules were not confirmed':'Schedules saved',text:`${saved.length} saved. ${failed.join('; ')}`,icon:failed.length?'warning':'success'});
                 this.renderTeachers();
+                }finally{this.generatingSlots=false;document.getElementById('delete-all-slots-btn').disabled=false;}
             },
 
             exportCSV() {
