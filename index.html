@@ -30,7 +30,7 @@
             } 
         }
     </script>
-    <link rel="stylesheet" href="admin-theme.css">
+    <link rel="stylesheet" href="admin-theme.css?v=20261021-log1">
 </head>
 <body class="font-sans antialiased">
 
@@ -119,7 +119,7 @@
                     
                     <div class="pt-4 mt-4 border-t-2 border-gray-100">
                         <button onclick="admin.showView('logs')" id="nav-logs" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600">
-                            <span class="nav-icon"><i class="far fa-file-lines" aria-hidden="true"></i></span> System Logs
+                            <span class="nav-icon"><i class="far fa-file-lines" aria-hidden="true"></i></span> Activity Log
                         </button>
                         <button onclick="admin.showView('settings')" id="nav-settings" class="sidebar-item w-full text-left px-4 py-4 rounded-2xl font-bold transition flex items-center gap-4 text-lg text-gray-600 mt-3">
                             <span class="nav-icon"><i class="fas fa-sliders" aria-hidden="true"></i></span> Settings
@@ -193,6 +193,9 @@
                     <div id="bookings-detail-body" class="space-y-4"></div>
                 </div>
 
+                <div id="activity-log-shortcut" class="hidden card-duo bg-white p-4">
+                    <p class="text-sm text-gray-600">Operation records and email delivery now share one page. <button onclick="admin.showView('logs')" class="text-blue-600 underline font-bold">Open Activity Log</button></p>
+                </div>
                 <div id="bookings-list-container" class="space-y-4 pb-20">
                     <div id="bookings-table-body" class="space-y-4"></div>
 
@@ -334,29 +337,23 @@
                 <div class="card-duo p-6 md:p-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white">
                     <div>
                         <h2 class="text-3xl font-black text-gray-800 flex items-center gap-3">
-                            System Logs
+                            Activity Log
                         </h2>
-                        <p class="text-base text-gray-500 font-bold mt-1">Track everything that happens in the system.</p>
+                        <p class="text-base text-gray-500 mt-1">Operations and email delivery, in one place.</p>
                     </div>
+                    <button id="logs-refresh" onclick="admin.refreshActivityLog()" class="btn-duo bg-white text-gray-600 border-2 border-gray-200 px-4 py-3">Refresh records</button>
                 </div>
                 
                 <div class="card-duo bg-white overflow-hidden">
-                    <div class="overflow-x-auto custom-scroll">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-gray-50 text-gray-500 font-extrabold uppercase tracking-widest text-xs border-b-2 border-gray-200">
-                                    <th class="p-4">Time</th>
-                                    <th class="p-4">Action</th>
-                                    <th class="p-4">User</th>
-                                    <th class="p-4">Details</th>
-                                </tr>
-                            </thead>
-                            <tbody id="logs-table-body" class="text-sm font-bold text-gray-700 divide-y-2 divide-gray-100">
-                                <!-- Logs -->
-                            </tbody>
-                        </table>
+                    <div class="activity-log-controls">
+                        <label>Record type<select id="logs-source" onchange="admin.renderLogs()" class="input-duo"><option value="all">All records</option><option value="operation">Operations</option><option value="email">Email notifications</option></select></label>
+                        <label>Email status<select id="logs-state" onchange="admin.renderLogs()" class="input-duo"><option value="all">All statuses</option><option value="attention">Needs attention</option><option value="pending">Queued</option><option value="deferred">Deferred</option><option value="sending">Sending</option><option value="sent">Sent</option><option value="unknown">Needs review</option><option value="superseded">Superseded</option><option value="failed">Failed</option></select></label>
+                        <label>Search<input id="logs-search" type="search" maxlength="200" oninput="admin.renderLogs()" placeholder="Action, email, teacher or reference" class="input-duo"></label>
                     </div>
-                    <div id="logs-empty" class="hidden p-10 text-center text-gray-400 font-bold">No logs found yet.</div>
+                    <p id="logs-feed-status" class="activity-log-summary" role="status" aria-live="polite"></p>
+                    <ol id="activity-log-list" class="activity-log-list" aria-label="Activity records"></ol>
+                    <div id="logs-empty" class="hidden p-8 text-center text-gray-500">No activity records yet.</div>
+                    <p class="activity-log-footnote">Latest 50 operations + 100 notifications, newest records first · Asia/Taipei. Filters apply to these recent records only. This is not a complete audit trail. Email rows show the current status, not a history of every attempt. Sent means the mail service accepted the request, not guaranteed inbox delivery.</p>
                 </div>
             </div>
 
@@ -478,7 +475,7 @@
 
 
         function escapeHtml(t) {
-            if (!t) return "";
+            if (t===null || t===undefined) return "";
             return t.toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
         }
 
@@ -529,7 +526,8 @@
                 config: 'artifacts/ibsh-pta-v2/public/system_settings',
                 logs: 'artifacts/ibsh-pta-v2/system_logs'
             },
-            data: { teachers: [], bookings: [], logs: [] },
+            data: { teachers: [], bookings: [], logs: [], notifications: [] },
+            logFeedState: {operations:'idle',email:'idle'}, logRetryPending: new Set(),
             ADMIN_EMAILS: ['ptaopenhour@ibsh.tw', 'pta.admin@ibsh.tw'],
             subjects: ["A&T","Chinese","CSS & WSS","English","Middle School Humanities","Elementary","Math","PE","Science"],
             IDLE_TIMEOUT: 15 * 60 * 1000, idleTimer: null, lastActivity: Date.now(),
@@ -549,6 +547,7 @@
                 // ✅ 只監聽登入狀態，不讀取任何 Firestore 資料
                 onAuthStateChanged(this.auth, async (user) => {
                     const overlay = document.getElementById('loading-overlay');
+                    this.resetActivityLog();
                     if (user) {
                         if (user.isAnonymous) { await signOut(this.auth); return; }
 
@@ -566,7 +565,7 @@
                         // ✅ 登入成功後才開始讀取 Firebase 資料（省下未登入的讀取）
                         this.initConfigListener();
                         this.loadBookings();
-                        if(this.userRole==='admin')this.watchNotifications();
+                        document.getElementById('activity-log-shortcut').classList.toggle('hidden',this.userRole!=='admin');
                         this.loadTeachers();
                         // ✅ Logs 不再自動載入，改為點進 Logs 頁面才載入（省 500 reads/次）
                         this.startIdleDetection();
@@ -639,15 +638,37 @@
             },
 
 
-            // ✨ 優化 3：改用 onSnapshot 監聽 Logs，Firebase 只推送增量資料
+            resetActivityLog() {
+                if(this.unsubscribeLogs)this.unsubscribeLogs();if(this.unsubscribeNotifications)this.unsubscribeNotifications();
+                this.unsubscribeLogs=null;this.unsubscribeNotifications=null;
+                this.logOperationsRevision=(this.logOperationsRevision||0)+1;this.logEmailRevision=(this.logEmailRevision||0)+1;
+                this.logIdentityRevision=(this.logIdentityRevision||0)+1;
+                this.data.logs=[];this.data.notifications=[];this.logFeedState={operations:'idle',email:'idle'};this.logRetryPending=new Set();
+                document.getElementById('activity-log-shortcut')?.classList.add('hidden');
+                document.getElementById('logs-search').value='';document.getElementById('logs-source').value='all';document.getElementById('logs-state').value='all';
+                this.renderLogs();
+            },
+
+            refreshActivityLog() {
+                if(this.userRole!=='admin')return;
+                this.initLogsListener();this.watchNotifications();
+            },
+
             initLogsListener() {
+                if(this.userRole!=='admin')return;
                 if(this.unsubscribeLogs) this.unsubscribeLogs();
+                const revision=this.logOperationsRevision=(this.logOperationsRevision||0)+1;
+                this.logFeedState.operations='loading';this.renderLogs();
                 const logsQuery = query(collection(this.db, this.paths.logs), orderBy("timestampMs", "desc"), limit(50));
                 
                 this.unsubscribeLogs = onSnapshot(logsQuery, (snap) => {
-                    this.data.logs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                    if(this.userRole!=='admin'||revision!==this.logOperationsRevision)return;
+                    this.data.logs = snap.docs.map(d => ({...d.data(), id: d.id}));
+                    this.logFeedState.operations='ready';
                     this.renderLogs();
                 }, (e) => {
+                    if(this.userRole!=='admin'||revision!==this.logOperationsRevision)return;
+                    this.logFeedState.operations='error';this.renderLogs();
                     console.warn("Could not load logs", e);
                     if(e.message.includes('index')) console.error("需要建立 Firebase Index！");
                 });
@@ -655,30 +676,45 @@
 
 
             renderLogs() {
-                const tbody = document.getElementById('logs-table-body');
-                const empty = document.getElementById('logs-empty');
-                if (!this.data.logs || this.data.logs.length === 0) {
-                    tbody.innerHTML = ''; empty.classList.remove('hidden'); return;
-                }
-                empty.classList.add('hidden');
-                
-                tbody.innerHTML = this.data.logs.map(log => {
-                    const date = new Date(log.timestamp).toLocaleString('en-US', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-                    let actionColor = 'text-gray-600 bg-gray-100 border-gray-200';
-                    const act = log.action || '';
-                    if (act.includes('Created') || act.includes('Added')) actionColor = 'text-duo-green bg-green-100 border-green-200';
-                    else if (act.includes('Cancel') || act.includes('Delete')) actionColor = 'text-duo-red bg-red-100 border-red-200';
-                    else if (act.includes('Update') || act.includes('Batch') || act.includes('Sent')) actionColor = 'text-duo-blue bg-blue-100 border-blue-200';
-
-
-                    return `
-                        <tr class="hover:bg-gray-50 transition">
-                            <td class="p-4 text-xs text-gray-500 whitespace-nowrap">${date}</td>
-                            <td class="p-4"><span class="px-2 py-1 rounded-lg text-xs font-black uppercase tracking-widest border ${actionColor}">${escapeHtml(act)}</span></td>
-                            <td class="p-4 text-xs font-extrabold text-gray-500">${escapeHtml(log.userEmail || 'System')}</td>
-                            <td class="p-4 text-sm text-gray-700 font-bold">${escapeHtml(log.details)}</td>
-                        </tr>`;
+                const list=document.getElementById('activity-log-list'),empty=document.getElementById('logs-empty'),summary=document.getElementById('logs-feed-status');
+                if(this.userRole!=='admin'){list.replaceChildren();summary.textContent='';empty.classList.add('hidden');return;}
+                const source=document.getElementById('logs-source').value,state=document.getElementById('logs-state');
+                state.disabled=source==='operation';if(state.disabled)state.value='all';
+                const needle=document.getElementById('logs-search').value.trim().toLowerCase();
+                const millis=value=>{let n=typeof value==='number'?value:typeof value?.toMillis==='function'?value.toMillis():Date.parse(value);return Number.isFinite(n)&&n>0&&n<=8640000000000000?n:0;};
+                const date=value=>{const n=millis(value);return n?new Date(n).toLocaleString('en-GB',{timeZone:'Asia/Taipei',month:'short',day:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}):'Unknown time';};
+                const kinds={confirmation:'Booking confirmation',cancellation:'Parent cancellation',teacherCancellation:'Teacher cancellation',schedule:'Teacher schedule'};
+                const states={pending:['Queued','blue'],deferred:['Deferred','amber'],sending:['Sending','blue'],sent:['Sent','green'],unknown:['Needs review','red'],superseded:['Superseded','gray'],failed:['Failed','red']};
+                const operations=this.data.logs.map(log=>({key:'operation:'+log.id,source:'operation',id:log.id,title:log.action||'Operation',person:log.userEmail||'System',
+                    time:millis(log.timestampMs)||millis(log.timestamp),detail:String(log.details||''),state:'recorded'}));
+                const emails=this.data.notifications.map(n=>({key:'email:'+n.id,source:'email',id:n.id,title:kinds[n.kind]||String(n.kind||'Email notification'),person:n.recipient||n.email||'Unknown recipient',
+                    time:millis(n.createdAt),detail:[n.payload?.teacherName,n.payload?.slotDate,n.payload?.slotTime].filter(Boolean).join(' · '),state:n.status||'unknown',notice:n}));
+                const rows=operations.concat(emails).sort((a,b)=>b.time-a.time||a.key.localeCompare(b.key));
+                const visible=rows.filter(row=>(source==='all'||row.source===source)&&(state.value==='all'||(row.source==='email'&&(state.value==='attention'?['deferred','unknown','failed'].includes(row.state):row.state===state.value)))
+                    &&[row.title,row.person,row.detail,row.id,row.state,row.notice?.kind,row.notice?.bookingId,row.notice?.eventId,row.notice?.error].filter(Boolean).join(' ').toLowerCase().includes(needle));
+                const feeds=Object.entries(this.logFeedState).map(([name,status])=>`${name==='operations'?'Operations':'Email'}: ${status==='error'?'unavailable (loaded records may be stale)':status==='ready'?'connected':status==='loading'?'loading…':'not loaded'}`);
+                summary.textContent=`Showing ${visible.length} of ${rows.length} loaded records. ${feeds.join(' · ')}`;
+                empty.classList.toggle('hidden',visible.length>0);
+                empty.textContent=Object.values(this.logFeedState).includes('loading')?'Loading activity records…':!rows.length&&Object.values(this.logFeedState).includes('error')?'Records unavailable. Check your connection or permissions.':rows.length?'No records match these filters.':'No activity records yet.';
+                list.innerHTML=visible.map(row=>{
+                    const email=row.source==='email',n=row.notice,tag=email?(states[row.state]||[String(row.state),'gray']):['Recorded','gray'];
+                    const detail=email?`<p>Activity: ${escapeHtml(n.eventId||'—')}</p><p>Booking reference: ${escapeHtml(n.bookingId||'—')}</p><p>Created: ${escapeHtml(date(n.createdAt))}</p>${n.sendingAt?`<p>Sending started: ${escapeHtml(date(n.sendingAt))}</p>`:''}${n.completedAt?`<p>Completed: ${escapeHtml(date(n.completedAt))}</p>`:''}<p>Attempts: ${escapeHtml(n.attempts??0)}</p>${n.nextAttemptAt&&row.state==='deferred'?`<p>Retry eligible after: ${escapeHtml(date(n.nextAttemptAt))}</p>`:''}${n.error?`<p class="activity-log-error">${escapeHtml(n.error)}</p>`:''}${row.state==='unknown'?'<p>Confirm the delivery result manually. Automatic resend is disabled.</p>':''}`:'';
+                    const retry=email&&row.state==='deferred'?`<button type="button" data-log-retry="${escapeHtml(row.id)}" ${this.logRetryPending.has(row.id)?'disabled':''} class="activity-log-retry">${this.logRetryPending.has(row.id)?'Requesting retry…':'Retry email'}</button>`:'';
+                    return `<li class="activity-log-entry" data-log-source="${row.source}" data-log-state="${escapeHtml(row.state)}"><div class="activity-log-icon ${email?'is-email':''}" aria-hidden="true"><i class="${email?'far fa-envelope':'far fa-file-lines'}"></i></div><div class="activity-log-content"><div class="activity-log-heading"><span class="activity-log-source">${email?'Email':'Operation'}</span><span class="activity-log-pill is-${tag[1]}">${escapeHtml(tag[0])}</span></div><h3>${escapeHtml(row.title)}</h3><p class="activity-log-person">${escapeHtml(row.person)}</p>${row.detail?`<p class="activity-log-description">${escapeHtml(row.detail)}</p>`:''}<details class="activity-log-details"><summary>View details</summary><div><p>Record reference: ${escapeHtml(row.id)}</p>${detail}</div></details>${retry}</div><time class="activity-log-time" ${row.time?`datetime="${new Date(row.time).toISOString()}"`:''}>${escapeHtml(date(row.time))}</time></li>`;
                 }).join('');
+                list.onclick=event=>{const button=event.target.closest('[data-log-retry]');if(button&&list.contains(button))void this.retryNotificationFromLog(button.dataset.logRetry);};
+            },
+
+            async retryNotificationFromLog(id) {
+                if(this.userRole!=='admin'||this.logRetryPending.has(id))return;
+                const notice=this.data.notifications.find(n=>n.id===id);
+                if(notice?.status!=='deferred')return Swal.fire({title:'Status changed',text:'Refresh the activity log. Only deferred notifications can be retried here.',icon:'info'});
+                const pending=this.logRetryPending,revision=this.logIdentityRevision;pending.add(id);this.renderLogs();
+                try{
+                    await backend({action:'retryNotification',notificationId:id});
+                    if(this.userRole==='admin'&&this.logIdentityRevision===revision)await Swal.fire({title:'Retry requested',text:'The server accepted the retry request. Check the latest delivery status in the log.',icon:'info',customClass:{popup:'swal-saas'}});
+                }catch(error){if(this.userRole==='admin'&&this.logIdentityRevision===revision)await Swal.fire({title:'Retry not confirmed',text:error.message,icon:'warning',customClass:{popup:'swal-saas'}});}
+                finally{pending.delete(id);if(this.logIdentityRevision===revision)this.renderLogs();}
             },
 
 
@@ -800,6 +836,7 @@
                 if (viewId==='parents') this.loadParentAccounts(true);
                 // ✅ 點進 Logs 頁面才啟動監聽（lazy load）
                 if (viewId==='logs' && !this.unsubscribeLogs) this.initLogsListener();
+                if (viewId==='logs' && !this.unsubscribeNotifications) this.watchNotifications();
                 if (window.innerWidth < 768) this.toggleSidebar(false);
             },
 
@@ -1267,17 +1304,17 @@
             },
 
             watchNotifications() {
+                if(this.userRole!=='admin')return;
                 if(this.unsubscribeNotifications)this.unsubscribeNotifications();
+                const revision=this.logEmailRevision=(this.logEmailRevision||0)+1;
+                this.logFeedState.email='loading';this.renderLogs();
                 this.unsubscribeNotifications=onSnapshot(query(collection(this.db,'artifacts/ibsh-pta-v2/notification_outbox'),orderBy('createdAt','desc'),limit(100)),snap=>{
-                    let panel=document.getElementById('notification-status-panel');
-                    if(!panel){panel=document.createElement('section');panel.id='notification-status-panel';panel.className='card-duo p-5';document.getElementById('view-bookings').append(panel);}
-                    const rows=snap.docs.map(d=>({id:d.id,...d.data()}));
-                    panel.innerHTML='<h3 class="text-lg font-bold mb-3">Notification delivery · latest 100</h3><p class="text-sm mb-4">Booking status is separate from email delivery. Unknown results require manual review; do not resend.</p>'+rows.map(n=>`<div class="py-3 border-t text-sm break-words"><strong>${escapeHtml(n.kind)}</strong> · ${escapeHtml(n.recipient)}<br>Status: ${escapeHtml(n.status)} · Attempts: ${n.attempts||0}<br><small>Reference: ${escapeHtml(n.id)}</small>${n.status==='deferred'?` <button class="underline" data-retry="${escapeHtml(n.id)}">Retry</button>`:''}</div>`).join('');
-                    panel.querySelectorAll('[data-retry]').forEach(btn=>btn.onclick=async()=>{
-                        btn.disabled=true;try{await backend({action:'retryNotification',notificationId:btn.dataset.retry});}
-                        catch(e){Swal.fire({title:'Not retried',text:e.message,icon:'warning'});}finally{btn.disabled=false;}
-                    });
-                },()=>{ console.warn('Notification status unavailable'); });
+                    if(this.userRole!=='admin'||revision!==this.logEmailRevision)return;
+                    this.data.notifications=snap.docs.map(d=>({...d.data(),id:d.id}));this.logFeedState.email='ready';this.renderLogs();
+                },()=>{
+                    if(this.userRole!=='admin'||revision!==this.logEmailRevision)return;
+                    this.logFeedState.email='error';this.renderLogs();console.warn('Notification status unavailable');
+                });
             },
 
             async loadBookings() {
@@ -1500,7 +1537,7 @@
                 try {
                     await backend({action:'cancel',bookingId:bid});
                     await this.loadBookings();
-                    Swal.fire({title:'Booking cancelled',text:'Cancellation notifications are queued. Check notification status below.',icon:'success'});
+                    Swal.fire({title:'Booking cancelled',text:'Cancellation notifications are queued. Check email status in Activity Log.',icon:'success'});
                 } catch(e){Swal.fire({title:'Cancellation not confirmed',text:e.message,icon:'error'});}
             },
 
@@ -1812,7 +1849,7 @@
                         for(const teacherId of teacherIds)try{await backend({action:'sendTeacherSchedules',teacherId});queued.push(teacherId);}catch(e){failed.push(e.message);}
                     }
                     Swal.fire({title:failed.length?'Queue partially updated':'Notifications tracked',
-                        text:`${queued.length} teacher schedules queued or already tracked. ${failed.join('; ')} Check notification status; queuing does not mean delivered.`,icon:failed.length?'warning':'success'});
+                        text:`${queued.length} teacher schedules queued or already tracked. ${failed.join('; ')} Check Activity Log for email status; queuing does not mean delivered.`,icon:failed.length?'warning':'success'});
                 } catch (e) { console.error('📧 GAS Error:', e); Swal.fire({title: 'Error', text: e.message, icon: 'error', customClass:{popup:'swal-saas'}}); }
             }
         };
